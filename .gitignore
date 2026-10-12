@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Local configuration
+.env
+
+# Logs
+*.log
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+
+# Local notes
+docs/
+
+/server.test.js
+/src/**/*.test.js

@@ -1,0 +1,16 @@
+{
+  "name": "ubuntu-cli-ui",
+  "version": "0.1.0",
+  "description": "Web panel for monitoring an Ubuntu server from the browser (Node.js core only)",
+  "license": "MIT",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js",
+    "dev": "node --watch --env-file-if-exists=.env server.js",
+    "test": "node --test \"tests/*.test.js\""
+  },
+  "engines": {
+    "node": ">=22.9"
+  }
+}
