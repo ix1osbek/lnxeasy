@@ -19,6 +19,7 @@ You need Linux and Node.js 22.9 or newer. There is nothing to install: the proje
 git clone https://github.com/<your-username>/lnxeasy.git
 cd lnxeasy
 cp .env.example .env
+npm run passwd # create the admin account (once)
 npm run dev    # start the server, restart on file changes
 npm test       # run the tests
 ```
@@ -29,10 +30,13 @@ Then open `http://127.0.0.1:4321`.
 
 ```
 server.js            Wires everything together: config, router, modules, app, listen
+cli.js               The `lnxeasy` command: sets the admin password
+install.sh           Installer for servers: Node.js, systemd service, certificate, admin account
 src/
   config.js          Reads settings from the environment
   core/              Shared tools used by every module (errors, ...)
   http/              HTTP layer: App, Router, response helpers, static files
+  auth/              Login: password hashing, sessions, login limiter, access guard
   modules/           One folder per feature
     index.js         The single place where modules are registered
     system/          Hostname, uptime, CPU, load average, memory

@@ -10,7 +10,7 @@ It runs on the server as a single Node.js process that serves both the web page 
 No external dependencies: only Node.js core modules on the server, plain HTML, CSS and JavaScript in the browser.
 
 > Early stage. The system overview and listening ports are available so far. Disks, processes,
-> services, login and server management are planned.
+> services and server management are planned.
 
 ## Install on a server
 
@@ -18,29 +18,45 @@ No external dependencies: only Node.js core modules on the server, plain HTML, C
 curl -fsSL https://raw.githubusercontent.com/ix1osbek/lnxeasy/main/install.sh | sudo bash
 ```
 
-The installer needs a Linux server with systemd (x86_64 or aarch64). It does not need Node.js or git:
-it downloads its own copy of Node.js into `/opt/lnxeasy`, creates a `lnxeasy` system user and
-starts a systemd service.
+The installer needs a Linux server with systemd (x86_64 or aarch64), `curl` and `openssl`.
+It does not need Node.js or git: it downloads its own copy of Node.js into `/opt/lnxeasy`.
 
-There is no login yet, so the service listens on `127.0.0.1` only. Open it from your computer
-through an SSH tunnel:
+When it finishes it prints the address, the username and a random password:
 
-```bash
-ssh -L 4321:127.0.0.1:4321 user@server
+```
+lnxeasy is running.
+
+    Open:      https://203.0.113.10:4321
+    Username:  admin
+    Password:  k7qmx-39xtw-wz2pe-ab3cd
 ```
 
-and then open `http://127.0.0.1:4321`.
+Open the address in the browser and sign in. The browser warns about the certificate once,
+because the installer creates a self-signed one. If the page does not open, allow TCP port 4321
+in the firewall of the server and of your cloud provider.
 
 | Task | Command |
 |------|---------|
+| Change the password | in the browser, or `sudo lnxeasy passwd` |
 | Status | `systemctl status lnxeasy` |
 | Log | `journalctl -u lnxeasy -f` |
 | Settings | edit `/etc/lnxeasy/lnxeasy.env`, then `systemctl restart lnxeasy` |
 | Update | run the installer again |
 | Uninstall | `curl -fsSL https://raw.githubusercontent.com/ix1osbek/lnxeasy/main/install.sh \| sudo bash -s -- --uninstall` |
 
-The service runs as an unprivileged user, so it only sees the processes of that user.
-Ports held by other users are listed without a process name.
+### Security
+
+- The page and the API require a login. The password is stored only as an scrypt hash
+  in `/var/lib/lnxeasy/auth.json`, readable by the `lnxeasy` user alone.
+- Everything is served over HTTPS. The server refuses to listen on a public address without it.
+- Five wrong passwords from one address lock that address out for 15 minutes.
+- The session cookie is `HttpOnly`, `Secure` and `SameSite=Strict`, and requests that change
+  something are rejected when they come from another site.
+- The service runs as the unprivileged `lnxeasy` user. Because of that it only sees its own
+  processes: ports held by other users are listed without a process name.
+- To keep the panel off the internet, set `HOST=127.0.0.1` in the settings file and reach it
+  through an SSH tunnel: `ssh -L 4321:127.0.0.1:4321 user@server`.
+- To use your own certificate, point `TLS_CERT_FILE` and `TLS_KEY_FILE` in the settings file at it.
 
 ## Run from source
 
@@ -50,10 +66,11 @@ Requires Linux and Node.js 22.9 or newer.
 git clone https://github.com/ix1osbek/lnxeasy.git
 cd lnxeasy
 cp .env.example .env
+npm run passwd    # create the admin account
 npm start
 ```
 
-Open `http://127.0.0.1:4321` in the browser. Change `HOST` and `PORT` in `.env`.
+Open `http://127.0.0.1:4321` and sign in as `admin`. Change `HOST` and `PORT` in `.env`.
 
 ## API
 
@@ -62,6 +79,11 @@ Open `http://127.0.0.1:4321` in the browser. Change `HOST` and `PORT` in `.env`.
 | `GET /api/health` | Returns `{"data":{"status":"ok"}}` |
 | `GET /api/system` | Hostname, IP address, kernel, uptime, CPU, load average, memory and swap |
 | `GET /api/ports` | Listening TCP and UDP ports and the processes that hold them |
+| `POST /api/auth/login` | Signs in with `{"username", "password"}` and sets the session cookie |
+| `POST /api/auth/logout` | Signs out |
+| `POST /api/auth/password` | Changes the password with `{"currentPassword", "newPassword"}` |
+
+Every endpoint except `/api/health` and `/api/auth/login` requires a session.
 
 Successful responses look like `{ "data": ... }`, errors like
 `{ "error": { "code": "NOT_FOUND", "message": "..." } }`.
