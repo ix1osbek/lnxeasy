@@ -385,7 +385,8 @@ wait_until_ready() {
 detect_client_address() {
     local address
 
-    address="${SSH_CLIENT%% *}"
+    address="${SSH_CLIENT:-}"
+    address="${address%% *}"
     if [ -z "$address" ]; then
         address="$(who -m 2>/dev/null | sed -n 's/.*(\(.*\)).*/\1/p')"
     fi
