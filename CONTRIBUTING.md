@@ -23,7 +23,7 @@ npm run dev    # start the server, restart on file changes
 npm test       # run the tests
 ```
 
-Then open `http://127.0.0.1:4321/api/system`.
+Then open `http://127.0.0.1:4321`.
 
 ## Project layout
 
@@ -32,10 +32,11 @@ server.js            Wires everything together: config, router, modules, app, li
 src/
   config.js          Reads settings from the environment
   core/              Shared tools used by every module (errors, ...)
-  http/              HTTP layer: App, Router, response helpers
+  http/              HTTP layer: App, Router, response helpers, static files
   modules/           One folder per feature
     index.js         The single place where modules are registered
     system/          Hostname, uptime, CPU, load average, memory
+public/              The web page: plain HTML, CSS and JavaScript, no build step
 tests/               Tests, run with node:test
 ```
 
@@ -73,6 +74,8 @@ Only `*.routes.js` may import from `src/http/`. Services and parsers never touch
   it receives them. This is what makes it testable without a real Linux machine.
 - **Never pass input to a shell.** Commands are started with `execFile` or `spawn` and an array of arguments.
 - **Throw, do not catch.** Route handlers do not use `try`/`catch`. Throw an `AppError` and `App` turns it into a JSON response.
+- **No frameworks or CDNs in the browser.** The page in `public/` loads only its own files, and the server
+  sends a Content Security Policy that blocks everything else. Put text on the page with `textContent`, never `innerHTML`.
 - **Match the surrounding style.** Four spaces, single quotes, no semicolons.
 
 ## API shape
