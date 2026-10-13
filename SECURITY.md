@@ -8,7 +8,7 @@ so security problems are taken seriously.
 Please do not open a public issue for a security problem.
 
 Report it privately through
-[GitHub private vulnerability reporting](https://github.com/ix1osbek/lnxeasy/security/advisories/new).
+[GitHub private vulnerability reporting](https://github.com/lnxeasy/lnxeasy/security/advisories/new).
 Include what you found, how to reproduce it and which version or commit you tested.
 
 You will get an answer within a week. Once a fix is released, the problem is described

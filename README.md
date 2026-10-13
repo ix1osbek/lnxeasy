@@ -15,7 +15,7 @@ No external dependencies: only Node.js core modules on the server, plain HTML, C
 ## Install on a server
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ix1osbek/lnxeasy/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/lnxeasy/lnxeasy/main/install.sh | sudo bash
 ```
 
 The installer needs a Linux server with systemd (x86_64 or aarch64), `curl` and `openssl`.
@@ -46,12 +46,12 @@ in the firewall of the server and of your cloud provider.
 | Log, including sign-ins | `journalctl -u lnxeasy -f` |
 | Settings | edit `/etc/lnxeasy/lnxeasy.env`, then `systemctl restart lnxeasy` |
 | Update | run the installer again |
-| Uninstall | `curl -fsSL https://raw.githubusercontent.com/ix1osbek/lnxeasy/main/install.sh \| sudo bash -s -- --uninstall` |
+| Uninstall | `curl -fsSL https://raw.githubusercontent.com/lnxeasy/lnxeasy/main/install.sh \| sudo bash -s -- --uninstall` |
 
 ### Installer options
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ix1osbek/lnxeasy/main/install.sh | sudo bash -s -- --allow-ip 203.0.113.7
+curl -fsSL https://raw.githubusercontent.com/lnxeasy/lnxeasy/main/install.sh | sudo bash -s -- --allow-ip 203.0.113.7
 ```
 
 | Option | Effect |
@@ -63,7 +63,7 @@ curl -fsSL https://raw.githubusercontent.com/ix1osbek/lnxeasy/main/install.sh | 
 Prefer to read a script before running it as root? Download it first:
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/ix1osbek/lnxeasy/main/install.sh
+curl -fsSLO https://raw.githubusercontent.com/lnxeasy/lnxeasy/main/install.sh
 less install.sh
 sudo bash install.sh
 ```
@@ -86,7 +86,7 @@ Recommended after installing:
 Requires Linux and Node.js 22.9 or newer.
 
 ```bash
-git clone https://github.com/ix1osbek/lnxeasy.git
+git clone https://github.com/lnxeasy/lnxeasy.git
 cd lnxeasy
 cp .env.example .env
 npm run passwd    # create the admin account
@@ -125,14 +125,14 @@ npm test      # run the tests
 
 Contributions are welcome: bug reports, ideas, documentation and code.
 Read [CONTRIBUTING.md](CONTRIBUTING.md) to get started, or pick an issue labeled
-[`good first issue`](https://github.com/ix1osbek/lnxeasy/labels/good%20first%20issue).
+[`good first issue`](https://github.com/lnxeasy/lnxeasy/labels/good%20first%20issue).
 
 ## Contributors
 
 Thanks to everyone who has helped build lnxeasy.
 
-<a href="https://github.com/ix1osbek/lnxeasy/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=ix1osbek/lnxeasy" alt="Contributors" />
+<a href="https://github.com/lnxeasy/lnxeasy/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=lnxeasy/lnxeasy" alt="Contributors" />
 </a>
 
 ## License
