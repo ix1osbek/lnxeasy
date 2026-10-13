@@ -6,6 +6,20 @@ export class SystemService {
         this.readFile = readFile
     }
 
+    findIpAddress() {
+        const interfaces = this.os.networkInterfaces()
+
+        for (const name of Object.keys(interfaces)) {
+            for (const address of interfaces[name]) {
+                if (address.family === 'IPv4' && !address.internal) {
+                    return address.address
+                }
+            }
+        }
+
+        return null
+    }
+
     async getInfo() {
         const cpus = this.os.cpus()
 
@@ -21,6 +35,7 @@ export class SystemService {
 
         return {
             hostname: this.os.hostname(),
+            ipAddress: this.findIpAddress(),
             platform: this.os.platform(),
             release: this.os.release(),
             arch: this.os.arch(),

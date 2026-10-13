@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>lnxeasy</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="topbar">
+    <div class="brand">
+        <img class="brand-mark" src="/favicon.svg" alt="">
+        <span class="brand-name">lnx<em>easy</em></span>
+    </div>
+
+    <div class="server">
+        <span class="server-label">Server</span>
+        <span class="server-ip" id="server-ip">—</span>
+        <button class="icon-button" id="toggle-ip" type="button" aria-label="Hide the server address" title="Hide the server address">
+            <svg class="icon" id="icon-eye" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/>
+                <circle cx="12" cy="12" r="3"/>
+            </svg>
+            <svg class="icon" id="icon-eye-off" viewBox="0 0 24 24" aria-hidden="true" hidden>
+                <path d="M3 3l18 18"/>
+                <path d="M10.6 5.1A10.9 10.9 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.2M6.5 6.6C3.6 8.5 2 12 2 12s3.6 7 10 7a10.3 10.3 0 0 0 5.1-1.3"/>
+                <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>
+            </svg>
+        </button>
+    </div>
+
+    <div class="topbar-actions">
+        <span class="updated" id="updated"></span>
+        <span class="status" id="status">
+            <span class="status-dot"></span>
+            <span id="status-text">Connecting</span>
+        </span>
+        <button class="button" id="toggle-refresh" type="button">Pause</button>
+    </div>
+</header>
+
+<main class="page">
+    <div class="alert" id="system-error" hidden>
+        <strong id="system-error-title"></strong>
+        <span id="system-error-text"></span>
+    </div>
+
+    <section aria-labelledby="overview-title">
+        <div class="section-head">
+            <h2 class="section-title" id="overview-title">Overview</h2>
+            <span class="section-note" id="system-line"></span>
+        </div>
+
+        <div class="cards">
+            <article class="card">
+                <h3 class="card-label">Uptime</h3>
+                <p class="card-value" id="uptime">—</p>
+                <p class="card-note" id="kernel"></p>
+            </article>
+
+            <article class="card">
+                <h3 class="card-label">CPU load</h3>
+                <p class="card-value"><span id="load-one">—</span><span class="card-unit" id="load-percent"></span></p>
+                <div class="meter"><div class="meter-fill" id="load-bar"></div></div>
+                <p class="card-note" id="load-detail"></p>
+            </article>
+
+            <article class="card">
+                <h3 class="card-label">Memory</h3>
+                <p class="card-value"><span id="memory-used">—</span><span class="card-unit" id="memory-total"></span></p>
+                <div class="meter"><div class="meter-fill" id="memory-bar"></div></div>
+                <p class="card-note" id="memory-detail"></p>
+            </article>
+
+            <article class="card">
+                <h3 class="card-label">Swap</h3>
+                <p class="card-value"><span id="swap-used">—</span><span class="card-unit" id="swap-total"></span></p>
+                <div class="meter"><div class="meter-fill" id="swap-bar"></div></div>
+                <p class="card-note" id="swap-detail"></p>
+            </article>
+        </div>
+    </section>
+
+    <section aria-labelledby="ports-title">
+        <div class="section-head">
+            <h2 class="section-title" id="ports-title">Listening ports</h2>
+            <span class="section-note" id="ports-count"></span>
+        </div>
+
+        <div class="panel">
+            <div class="filters">
+                <div class="search-box">
+                    <svg class="icon search-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="11" cy="11" r="7"/>
+                        <path d="M20 20l-4-4"/>
+                    </svg>
+                    <input class="search" id="ports-search" type="text" placeholder="Search port, address, process or PID"
+                           aria-label="Search ports" autocomplete="off" spellcheck="false">
+                    <button class="search-clear" id="ports-search-clear" type="button" aria-label="Clear search" hidden>
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M6 6l12 12M18 6L6 18"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="filter-group">
+                    <span class="filter-label">Protocol</span>
+                    <div class="segmented" id="filter-protocol">
+                        <button class="segment is-active" type="button" data-value="all">All <span class="segment-count" data-count="all"></span></button>
+                        <button class="segment" type="button" data-value="tcp">TCP <span class="segment-count" data-count="tcp"></span></button>
+                        <button class="segment" type="button" data-value="udp">UDP <span class="segment-count" data-count="udp"></span></button>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <span class="filter-label">Reach</span>
+                    <div class="segmented" id="filter-reach">
+                        <button class="segment is-active" type="button" data-value="all">Any <span class="segment-count" data-count="all"></span></button>
+                        <button class="segment" type="button" data-value="public">All interfaces <span class="segment-count" data-count="public"></span></button>
+                        <button class="segment" type="button" data-value="interface">One network <span class="segment-count" data-count="interface"></span></button>
+                        <button class="segment" type="button" data-value="local">This machine <span class="segment-count" data-count="local"></span></button>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <span class="filter-label">Process</span>
+                    <div class="segmented" id="filter-process">
+                        <button class="segment is-active" type="button" data-value="all">Any <span class="segment-count" data-count="all"></span></button>
+                        <button class="segment" type="button" data-value="known">Known <span class="segment-count" data-count="known"></span></button>
+                        <button class="segment" type="button" data-value="hidden">Hidden <span class="segment-count" data-count="hidden"></span></button>
+                    </div>
+                </div>
+
+                <button class="link-button" id="filters-reset" type="button" hidden>Reset filters</button>
+            </div>
+
+            <div class="alert alert-inline" id="ports-error" hidden>
+                <strong id="ports-error-title"></strong>
+                <span id="ports-error-text"></span>
+            </div>
+
+            <div class="table-wrap">
+                <table class="table">
+                    <thead>
+                    <tr>
+                        <th class="col-port"><button class="sort" type="button" data-sort="port">Port<span class="sort-arrow"></span></button></th>
+                        <th><button class="sort" type="button" data-sort="protocol">Protocol<span class="sort-arrow"></span></button></th>
+                        <th><button class="sort" type="button" data-sort="address">Address<span class="sort-arrow"></span></button></th>
+                        <th><button class="sort" type="button" data-sort="reach">Reach<span class="sort-arrow"></span></button></th>
+                        <th><button class="sort" type="button" data-sort="process">Process<span class="sort-arrow"></span></button></th>
+                        <th class="col-pid">PID</th>
+                    </tr>
+                    </thead>
+                    <tbody id="ports-body"></tbody>
+                </table>
+                <p class="empty" id="ports-empty" hidden>No ports match these filters.</p>
+            </div>
+
+            <div class="pager">
+                <span class="pager-range" id="pager-range"></span>
+                <div class="pager-buttons" id="pager-buttons"></div>
+            </div>
+        </div>
+
+        <p class="hint" id="ports-hint" hidden>
+            Rows marked “hidden” belong to processes of other users. They become visible when lnxeasy runs as root.
+        </p>
+    </section>
+</main>
+
+<footer class="footer">
+    <span>lnxeasy — Linux made easy</span>
+    <span>Read-only view · refreshes every 5 seconds</span>
+</footer>
+
+<script src="/app.js"></script>
+</body>
+</html>
