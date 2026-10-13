@@ -91,8 +91,7 @@ Error:    { "error": { "code": "NOT_FOUND", "message": "..." } }
   empty input, missing fields, unexpected content.
 - Tests must not depend on the machine they run on. Give the service fake dependencies
   instead of reading the real `/proc` or running real commands.
-- `npm test` must pass before you open a pull request. The same command runs in CI.
-
+- `npm test` must pass before you open a pull request.
 ## Pull requests
 
 1. Fork the repository and create a branch from `main`: `git checkout -b add-disk-module`.
