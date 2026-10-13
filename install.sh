@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPOSITORY="ix1osbek/lnxeasy"
+REPOSITORY="lnxeasy/lnxeasy"
 VERSION=""
 TREE_SHA256=""
 REF="${LNXEASY_REF:-}"

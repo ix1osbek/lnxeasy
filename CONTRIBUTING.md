@@ -7,7 +7,7 @@ Thanks for taking the time to help. Bug reports, ideas, documentation fixes and 
 - **Report a bug.** Open an issue with the bug report form.
 - **Suggest a feature.** Open an issue with the feature request form before writing code,
   so we can agree on the approach first.
-- **Pick an issue.** Issues labeled [`good first issue`](https://github.com/ix1osbek/lnxeasy/labels/good%20first%20issue)
+- **Pick an issue.** Issues labeled [`good first issue`](https://github.com/lnxeasy/lnxeasy/labels/good%20first%20issue)
   are small and well described. Leave a comment on the issue so nobody else starts the same work.
 - **Improve the docs.** Typos and unclear sentences are worth a pull request too.
 
