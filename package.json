@@ -1,6 +1,6 @@
 {
   "name": "lnxeasy",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Web panel for monitoring an Ubuntu server from the browser (Node.js core only)",
   "license": "MIT",
   "type": "module",
