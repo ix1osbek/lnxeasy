@@ -275,6 +275,7 @@ test('get returns one process with its parent, children and executable', async (
 
     assert.equal(details.process.pid, 40)
     assert.equal(details.executable, '/usr/sbin/nginx')
+    assert.deepEqual(details.arguments, ['nginx: worker process'])
     assert.deepEqual(details.parent, { pid: 1, name: 'systemd' })
     assert.deepEqual(details.children, [{ pid: 45, name: 'nginx' }])
 })
@@ -337,4 +338,14 @@ test('GET /api/process accepts only a positive whole number as the pid', async (
         await assert.rejects(handler({ url: url }, createFakeResponse()), BadRequestError, url)
     }
     assert.deepEqual(asked, [])
+})
+
+test('get returns the arguments one by one, including one that contains a space', async () => {
+    const { service, proc } = createService()
+    proc.setProcess(70, 'node', 'S', 1, 0, 0, 100, '/usr/bin/node\0server.js\0--name\0my app\0', 70)
+
+    const details = await service.get(70)
+
+    assert.deepEqual(details.arguments, ['/usr/bin/node', 'server.js', '--name', 'my app'])
+    assert.equal(details.process.command, '/usr/bin/node server.js --name my app')
 })

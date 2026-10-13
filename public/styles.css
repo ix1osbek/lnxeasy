@@ -1182,11 +1182,74 @@ section + section {
     background: var(--surface-soft);
     font-family: ui-monospace, Menlo, Consolas, monospace;
     font-size: 14px;
-    line-height: 1.5;
+    line-height: 1.55;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
-    max-height: 190px;
+    max-height: 260px;
     overflow-y: auto;
+}
+
+.command-program {
+    font-weight: 700;
+}
+
+.command-argument {
+    padding-left: 22px;
+    color: #3d3d38;
+}
+
+.subtitle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.button-small {
+    min-width: 0;
+    padding: 2px 12px;
+    font-size: 15px;
+}
+
+.disks {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 14px;
+}
+
+.disk {
+    padding: 16px 20px 18px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+
+.disk-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.disk-mount {
+    font-size: 19px;
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.disk-device {
+    color: var(--text-muted);
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.disk-value {
+    margin-top: 6px;
+    font-size: 24px;
+    font-weight: 700;
+    white-space: nowrap;
 }
 
 .chips {

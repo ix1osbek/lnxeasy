@@ -4,7 +4,7 @@ You are about to run lnxeasy on a server, as a service that is reachable over th
 You should not have to take anyone's word that it is safe. This document shows where everything
 is, in the order things happen, so that you can read the code yourself in about half an hour.
 
-The server side is about 2,800 lines of JavaScript with no dependencies, plus one shell script
+The server side is about 2,900 lines of JavaScript with no dependencies, plus one shell script
 that installs it. There is no build step: the files in the repository are the files that run.
 
 - [The ten-minute check](#the-ten-minute-check)
@@ -143,9 +143,10 @@ src/
     system/             Uptime, CPU, memory: reads /proc and node:os.
     ports/              Listening ports: asks the helper (or runs ss) and parses the output.
     processes/          The process list and one process: reads /proc.
+    disks/              Disk space: reads /proc/mounts and asks the kernel for sizes.
 
 public/                 The page: plain HTML, CSS and JavaScript.
-tests/                  199 tests, run with "npm test".
+tests/                  205 tests, run with "npm test".
 ```
 
 Imports go one way: `http/` and `auth/` may use `core/`, `modules/` may use `core/`,
@@ -168,7 +169,7 @@ in order. Each step is one function.
 | 8 | `write_command` | Writes `/usr/local/bin/lnxeasy`, a four-line wrapper that loads the settings and runs `cli.js`. |
 | 9 | `create_account` | On the first install only: generates a random password, stores its hash, keeps the password in a variable to print at the end. |
 | 10 | `write_helper_units` | Writes the two units of the helper that reads process names. See below. |
-| 11 | `write_unit` | Writes the systemd unit. It runs the service as `lnxeasy` with `NoNewPrivileges`, a read-only file system (`ProtectSystem=strict`), no access to `/home`, and a private `/tmp`. |
+| 11 | `write_unit` | Writes the systemd unit. It runs the service as `lnxeasy` with `NoNewPrivileges`, a read-only file system (`ProtectSystem=strict`), no access to `/home`, and a private `/tmp`. Only when you chose a port below 1024 does it add the one capability needed to listen there. |
 | 12 | `start_helper`, `start_service` | `systemctl enable` and `restart`. |
 | 13 | `print_summary` | Waits until the service answers, then prints the address, the password and the certificate fingerprint. |
 
@@ -298,6 +299,7 @@ the only other way to change the password is the `lnxeasy passwd` command on the
 | CPU use per core | reads `/proc/stat` | same |
 | User names for the owners | reads `/etc/passwd` | same |
 | Program file of a process | reads the link `/proc/<pid>/exe` | same |
+| Disks and their free space | reads `/proc/mounts`, then `statfs` on each mount point | [`src/modules/disks/disks.service.js`](src/modules/disks/disks.service.js) |
 
 That is the complete list. Nothing else on the server is read: no files in `/home`, no logs,
 no other configuration. The `*.parser.js` files only turn text into objects.
@@ -334,6 +336,7 @@ read-only for it, except for `/var/lib/lnxeasy`.
 | `POST /api/auth/two-step/disable` | yes, and the current password | same |
 | `GET /api/system` | yes | [`src/modules/system/system.routes.js`](src/modules/system/system.routes.js) |
 | `GET /api/ports` | yes | [`src/modules/ports/ports.routes.js`](src/modules/ports/ports.routes.js) |
+| `GET /api/disks` | yes | [`src/modules/disks/disks.routes.js`](src/modules/disks/disks.routes.js) |
 | `GET /api/processes` | yes | [`src/modules/processes/processes.routes.js`](src/modules/processes/processes.routes.js) |
 | `GET /api/process?pid=N` | yes | same |
 | files in `public/` | yes, except the login page and its assets | [`src/http/static.js`](src/http/static.js) |
@@ -344,7 +347,7 @@ To confirm that the list is complete:
 grep -rnE "router\.(get|post)\(" server.js src
 ```
 
-It prints thirteen lines, the thirteen endpoints above.
+It prints fourteen lines, the fourteen endpoints above.
 
 ## 8. The page in the browser
 

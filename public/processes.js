@@ -13,7 +13,8 @@ const processView = {
     sortBy: 'cpuPercent',
     sortDescending: true,
     page: 1,
-    openPid: null
+    openPid: null,
+    openCommand: ''
 }
 
 function formatPercent(value) {
@@ -278,6 +279,60 @@ async function refreshProcesses() {
     return true
 }
 
+function groupArguments(parts) {
+    const lines = []
+    let index = 1
+
+    while (index < parts.length) {
+        const part = parts[index]
+        const next = parts[index + 1]
+
+        if (part.startsWith('-') && !part.includes('=') && next !== undefined && !next.startsWith('-')) {
+            lines.push(part + ' ' + next)
+            index = index + 2
+        } else {
+            lines.push(part)
+            index = index + 1
+        }
+    }
+
+    return lines
+}
+
+function renderCommand(process, parts) {
+    const box = byId('process-command')
+    box.textContent = ''
+    processView.openCommand = process.command
+
+    if (parts.length === 0) {
+        box.appendChild(createElement('div', 'command-program', process.command))
+        return
+    }
+
+    box.appendChild(createElement('div', 'command-program', parts[0]))
+
+    for (const line of groupArguments(parts)) {
+        box.appendChild(createElement('div', 'command-argument', line))
+    }
+}
+
+async function copyCommand() {
+    const button = byId('process-copy')
+
+    try {
+        await navigator.clipboard.writeText(processView.openCommand)
+        button.textContent = 'Copied'
+    } catch (error) {
+        const selection = window.getSelection()
+        selection.selectAllChildren(byId('process-command'))
+        button.textContent = 'Selected, press Ctrl+C'
+    }
+
+    setTimeout(() => {
+        button.textContent = 'Copy'
+    }, 2000)
+}
+
 function renderProcessDetails(details) {
     const process = details.process
     const state = describeState(process.state)
@@ -314,7 +369,7 @@ function renderProcessDetails(details) {
         parent.appendChild(createElement('span', 'chip-note', 'PID ' + details.parent.pid))
     }
 
-    setText('process-command', process.command)
+    renderCommand(process, details.arguments)
     if (details.executable !== null) {
         setText('process-executable', 'Program file: ' + details.executable)
     } else if (process.kernelThread) {
@@ -451,6 +506,7 @@ for (const button of document.querySelectorAll('#processes-table .sort')) {
 }
 
 byId('process-close').addEventListener('click', closeProcess)
+byId('process-copy').addEventListener('click', copyCommand)
 
 byId('process-dialog').addEventListener('close', () => {
     processView.openPid = null

@@ -91,6 +91,20 @@
         </div>
     </section>
 
+    <section aria-labelledby="storage-title">
+        <div class="section-head">
+            <h2 class="section-title" id="storage-title">Storage</h2>
+            <span class="section-note" id="storage-note"></span>
+        </div>
+
+        <div class="alert" id="disks-error" hidden>
+            <strong id="disks-error-title"></strong>
+            <span id="disks-error-text"></span>
+        </div>
+
+        <div class="disks" id="disks"></div>
+    </section>
+
     <section aria-labelledby="ports-title">
         <div class="section-head">
             <h2 class="section-title" id="ports-title">Listening ports</h2>
@@ -395,8 +409,12 @@
             </section>
 
             <section class="dialog-section">
-                <h3 class="dialog-subtitle">Command</h3>
-                <p class="command-box" id="process-command"></p>
+                <div class="subtitle-row">
+                    <h3 class="dialog-subtitle">Command</h3>
+                    <button class="button button-small" id="process-copy" type="button">Copy</button>
+                </div>
+                <p class="dialog-text">How this process was started: the program, then each option on its own line.</p>
+                <div class="command-box" id="process-command"></div>
                 <p class="dialog-text" id="process-executable"></p>
             </section>
 

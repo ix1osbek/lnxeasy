@@ -241,6 +241,22 @@ export class ProcessesService {
         return this.lastResult
     }
 
+    async readArguments(pid) {
+        let text = ''
+        try {
+            text = await this.fs.readFile('/proc/' + pid + '/cmdline', 'utf8')
+        } catch (e) {
+            return []
+        }
+
+        const parts = text.split('\0')
+        while (parts.length > 0 && parts[parts.length - 1] === '') {
+            parts.pop()
+        }
+
+        return parts
+    }
+
     async readExecutable(pid) {
         try {
             return await this.fs.readlink('/proc/' + pid + '/exe')
@@ -277,6 +293,7 @@ export class ProcessesService {
         return {
             process: found,
             executable: await this.readExecutable(pid),
+            arguments: await this.readArguments(pid),
             parent: parent,
             children: children
         }

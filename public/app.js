@@ -108,6 +108,11 @@ function createApiError(code, message) {
 function formatBytes(bytes) {
     const gibibyte = 1024 * 1024 * 1024
     const mebibyte = 1024 * 1024
+    const tebibyte = gibibyte * 1024
+
+    if (bytes >= tebibyte) {
+        return (bytes / tebibyte).toFixed(2) + ' TiB'
+    }
 
     if (bytes >= gibibyte) {
         return (bytes / gibibyte).toFixed(1) + ' GiB'
@@ -256,6 +261,54 @@ function renderSystem(info) {
         setText('swap-total', 'of ' + formatBytes(info.swap.totalBytes))
         setMeter('swap-bar', swapPercent)
         setText('swap-detail', swapPercent + '% used · ' + formatBytes(info.swap.freeBytes) + ' free')
+    }
+}
+
+function createDiskCard(disk) {
+    const card = createElement('article', 'disk')
+    const head = createElement('div', 'disk-head')
+    const meter = createElement('div', 'meter')
+    const fill = createElement('div', 'meter-fill')
+
+    let width = disk.usedPercent
+    if (width > 100) {
+        width = 100
+    }
+    fill.style.width = width + '%'
+    fill.classList.toggle('is-warn', disk.usedPercent >= 80 && disk.usedPercent < 90)
+    fill.classList.toggle('is-danger', disk.usedPercent >= 90)
+    meter.appendChild(fill)
+
+    head.appendChild(createElement('span', 'disk-mount', disk.mountPoint))
+    head.appendChild(createElement('span', 'disk-device', disk.device + ' · ' + disk.type))
+
+    card.appendChild(head)
+    card.appendChild(createElement('p', 'disk-value', formatBytes(disk.usedBytes) + ' of ' + formatBytes(disk.totalBytes)))
+    card.appendChild(meter)
+    card.appendChild(createElement('p', 'card-note', Math.round(disk.usedPercent) + '% used · ' + formatBytes(disk.availableBytes) + ' free'))
+
+    return card
+}
+
+function renderDisks(disks) {
+    const container = byId('disks')
+    container.textContent = ''
+
+    let totalBytes = 0
+    let availableBytes = 0
+
+    for (const disk of disks) {
+        container.appendChild(createDiskCard(disk))
+        totalBytes = totalBytes + disk.totalBytes
+        availableBytes = availableBytes + disk.availableBytes
+    }
+
+    if (disks.length === 0) {
+        setText('storage-note', 'No disks found')
+    } else if (disks.length === 1) {
+        setText('storage-note', formatBytes(availableBytes) + ' free of ' + formatBytes(totalBytes))
+    } else {
+        setText('storage-note', disks.length + ' file systems · ' + formatBytes(availableBytes) + ' free of ' + formatBytes(totalBytes))
     }
 }
 
@@ -625,6 +678,14 @@ async function refresh() {
             anySuccess = true
         }
     } else {
+        try {
+            renderDisks(await fetchData('/api/disks'))
+            hideError('disks')
+            anySuccess = true
+        } catch (error) {
+            showError('disks', error)
+        }
+
         try {
             state.rows = mergePorts(await fetchData('/api/ports'))
             hideError('ports')

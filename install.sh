@@ -501,6 +501,14 @@ check_helper() {
 }
 
 write_unit() {
+    local port low_port_lines=""
+
+    port="$(read_config_value PORT "$DEFAULT_PORT")"
+    if [ "$port" -lt 1024 ]; then
+        low_port_lines="AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE"
+    fi
+
     cat > "$UNIT_FILE" <<EOF
 [Unit]
 Description=lnxeasy server panel
@@ -522,6 +530,7 @@ ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
 ReadWritePaths=$STATE_DIR
+$low_port_lines
 
 [Install]
 WantedBy=multi-user.target
