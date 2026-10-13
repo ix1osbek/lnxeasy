@@ -70,7 +70,7 @@ async function restartService() {
         await run('systemctl', ['restart', service])
         console.log('lnxeasy was restarted.')
     } catch (e) {
-        console.log('Could not restart lnxeasy. Run: sudo systemctl restart ' + service)
+        console.log('Could not restart lnxeasy. Run as root: systemctl restart ' + service)
     }
 }
 

@@ -45,11 +45,12 @@ in the release notes, with credit to you unless you prefer to stay anonymous.
   controls the repository itself.
 
 lnxeasy is a young project and has not had an independent security audit.
+[CODE_TOUR.md](CODE_TOUR.md) is written to make reviewing it yourself as easy as possible.
 For a server that matters, limit the panel to your own address or keep it behind a VPN.
 
 ## Recommended setup
 
-1. Limit who can reach the panel: `sudo lnxeasy allow YOUR_IP_ADDRESS`.
+1. Limit who can reach the panel: `lnxeasy allow YOUR_IP_ADDRESS` (as root).
 2. Turn on two-step sign-in: **Security** in the top bar.
-3. Check the certificate fingerprint on the first visit: `sudo lnxeasy fingerprint`.
+3. Check the certificate fingerprint on the first visit: `lnxeasy fingerprint` (as root).
 4. Update regularly by running the installer again.
