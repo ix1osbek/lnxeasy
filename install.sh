@@ -2,8 +2,8 @@
 set -euo pipefail
 
 REPOSITORY="lnxeasy/lnxeasy"
-VERSION=""
-TREE_SHA256=""
+VERSION="0.2.0"
+TREE_SHA256="c19c2613550feec81bac81aef020645f6f8ea4615233c93578d34388a4486cde"
 REF="${LNXEASY_REF:-}"
 NODE_LINE="latest-v22.x"
 
@@ -397,6 +397,34 @@ detect_client_address() {
     esac
 }
 
+print_firewall_hint() {
+    local port="$1" client="$2" as_root="$3" status
+
+    if ! command -v ufw >/dev/null 2>&1; then
+        return 0
+    fi
+
+    status="$(ufw status 2>/dev/null || true)"
+
+    if ! printf '%s\n' "$status" | grep -q "^Status: active"; then
+        return 0
+    fi
+
+    if printf '%s\n' "$status" | grep -qE "^$port(/tcp)?[[:space:]]"; then
+        return 0
+    fi
+
+    say ""
+    say "The ufw firewall on this server is on and does not let port $port through,"
+    say "so the page will not open until you allow it:"
+    say ""
+    if [ -n "$client" ]; then
+        say "    ${as_root}ufw allow from $client to any port $port proto tcp"
+    else
+        say "    ${as_root}ufw allow $port/tcp"
+    fi
+}
+
 print_summary() {
     local host port address allowed fingerprint client as_root
 
@@ -468,9 +496,12 @@ print_summary() {
         fi
     fi
 
+    print_firewall_hint "$port" "$(detect_client_address)" "$as_root"
+
     say ""
     say "After the first sign-in, open Security in the top bar and turn on two-step sign-in."
-    say "If the page does not open, allow TCP port $port in the firewall of the server and of your cloud provider."
+    say "If the page keeps loading and never opens, a firewall is blocking TCP port $port:"
+    say "check the firewall of the server and the one in your hosting provider's panel."
     say ""
     say "Status:     systemctl status lnxeasy"
     say "Log:        journalctl -u lnxeasy -f"

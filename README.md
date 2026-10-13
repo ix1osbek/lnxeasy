@@ -44,8 +44,10 @@ lnxeasy is running.
 ```
 
 Open the address in the browser and sign in. The browser warns about the certificate once,
-because the installer creates a self-signed one. If the page does not open, allow TCP port 4321
-in the firewall of the server and of your cloud provider.
+because the installer creates a self-signed one.
+
+If the page keeps loading and never opens, a firewall is blocking TCP port 4321. Allow it on the server
+(`ufw allow 4321/tcp`) and in the firewall of your hosting provider's panel, if it has one.
 
 The commands below need root. If you are not root, put `sudo` in front of them.
 
