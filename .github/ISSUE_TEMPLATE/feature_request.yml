@@ -1,0 +1,33 @@
+name: Feature request
+description: Suggest an idea or a new module
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: What are you trying to do on your server that lnxeasy does not help with today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: What should it look like? For a new endpoint, an example response is very helpful.
+    validations:
+      required: true
+
+  - type: textarea
+    id: source
+    attributes:
+      label: Where does the data come from?
+      description: A Node.js core module, a file under `/proc` or `/sys`, or a command. Leave empty if you are not sure.
+      placeholder: "`df --output=source,size,used,avail,target`"
+
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I would like to work on this myself

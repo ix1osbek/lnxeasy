@@ -1,4 +1,9 @@
-# Ubuntu CLI UI
+# lnxeasy
+
+[![Tests](https://github.com/ix1osbek/lnxeasy/actions/workflows/test.yml/badge.svg)](https://github.com/ix1osbek/lnxeasy/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D22.9-brightgreen.svg)](package.json)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 A small web panel for watching an Ubuntu server from the browser instead of the terminal.
 
@@ -45,6 +50,20 @@ Successful responses look like `{ "data": ... }`, errors like
 npm run dev   # restart on file changes
 npm test      # run the tests
 ```
+
+## Contributing
+
+Contributions are welcome: bug reports, ideas, documentation and code.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) to get started, or pick an issue labeled
+[`good first issue`](https://github.com/ix1osbek/lnxeasy/labels/good%20first%20issue).
+
+## Contributors
+
+Thanks to everyone who has helped build lnxeasy.
+
+<a href="https://github.com/ix1osbek/lnxeasy/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=ix1osbek/lnxeasy" alt="Contributors" />
+</a>
 
 ## License
 
