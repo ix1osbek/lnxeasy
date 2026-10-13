@@ -37,26 +37,49 @@ in the firewall of the server and of your cloud provider.
 
 | Task | Command |
 |------|---------|
-| Change the password | in the browser, or `sudo lnxeasy passwd` |
+| Change the password | **Security** in the top bar, or `sudo lnxeasy passwd` |
+| Turn on two-step sign-in | **Security** in the top bar |
+| Lost the phone | `sudo lnxeasy two-step --disable` |
+| Let only your address in | `sudo lnxeasy allow 203.0.113.7` (back to everyone: `sudo lnxeasy allow --any`) |
+| Check the certificate | `sudo lnxeasy fingerprint` |
 | Status | `systemctl status lnxeasy` |
-| Log | `journalctl -u lnxeasy -f` |
+| Log, including sign-ins | `journalctl -u lnxeasy -f` |
 | Settings | edit `/etc/lnxeasy/lnxeasy.env`, then `systemctl restart lnxeasy` |
 | Update | run the installer again |
 | Uninstall | `curl -fsSL https://raw.githubusercontent.com/ix1osbek/lnxeasy/main/install.sh \| sudo bash -s -- --uninstall` |
 
+### Installer options
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ix1osbek/lnxeasy/main/install.sh | sudo bash -s -- --allow-ip 203.0.113.7
+```
+
+| Option | Effect |
+|--------|--------|
+| `--allow-ip ADDRESS` | Only this address or range can reach the panel. May be repeated. |
+| `--cert FILE --key FILE` | Use your own HTTPS certificate, for example one from Let's Encrypt, instead of a self-signed one. |
+| `--uninstall` | Remove lnxeasy and everything it created. |
+
+Prefer to read a script before running it as root? Download it first:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/ix1osbek/lnxeasy/main/install.sh
+less install.sh
+sudo bash install.sh
+```
+
 ### Security
 
-- The page and the API require a login. The password is stored only as an scrypt hash
-  in `/var/lib/lnxeasy/auth.json`, readable by the `lnxeasy` user alone.
-- Everything is served over HTTPS. The server refuses to listen on a public address without it.
-- Five wrong passwords from one address lock that address out for 15 minutes.
-- The session cookie is `HttpOnly`, `Secure` and `SameSite=Strict`, and requests that change
-  something are rejected when they come from another site.
-- The service runs as the unprivileged `lnxeasy` user. Because of that it only sees its own
-  processes: ports held by other users are listed without a process name.
-- To keep the panel off the internet, set `HOST=127.0.0.1` in the settings file and reach it
-  through an SSH tunnel: `ssh -L 4321:127.0.0.1:4321 user@server`.
-- To use your own certificate, point `TLS_CERT_FILE` and `TLS_KEY_FILE` in the settings file at it.
+The panel requires a login and HTTPS, supports two-step sign-in, locks out an address after
+five failed attempts, can be limited to chosen addresses and runs as an unprivileged user.
+[SECURITY.md](SECURITY.md) lists everything it does, what it does not protect against,
+and how to report a problem.
+
+Recommended after installing:
+
+1. `sudo lnxeasy allow YOUR_IP_ADDRESS`
+2. Turn on two-step sign-in under **Security**.
+3. On the first visit, compare the certificate fingerprint in the browser with the one the installer printed.
 
 ## Run from source
 
@@ -79,9 +102,12 @@ Open `http://127.0.0.1:4321` and sign in as `admin`. Change `HOST` and `PORT` in
 | `GET /api/health` | Returns `{"data":{"status":"ok"}}` |
 | `GET /api/system` | Hostname, IP address, kernel, uptime, CPU, load average, memory and swap |
 | `GET /api/ports` | Listening TCP and UDP ports and the processes that hold them |
-| `POST /api/auth/login` | Signs in with `{"username", "password"}` and sets the session cookie |
+| `POST /api/auth/login` | Signs in with `{"username", "password", "code"}` and sets the session cookie |
 | `POST /api/auth/logout` | Signs out |
 | `POST /api/auth/password` | Changes the password with `{"currentPassword", "newPassword"}` |
+| `GET /api/auth/session` | The signed-in user and whether two-step sign-in is on |
+| `GET /api/auth/events` | Recent sign-ins and failed attempts |
+| `POST /api/auth/two-step/setup`, `/enable`, `/disable` | Manage two-step sign-in |
 
 Every endpoint except `/api/health` and `/api/auth/login` requires a session.
 
