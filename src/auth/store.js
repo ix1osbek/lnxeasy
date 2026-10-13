@@ -32,20 +32,32 @@ export class AuthStore {
             throw new Error('Invalid auth file: ' + this.filePath)
         }
 
+        let totpSecret = null
+        if (typeof account.totpSecret === 'string' && account.totpSecret !== '') {
+            totpSecret = account.totpSecret
+        }
+
         return {
             username: account.username,
             salt: account.salt,
-            hash: account.hash
+            hash: account.hash,
+            totpSecret: totpSecret
         }
     }
 
     async save(account) {
         const directory = path.dirname(this.filePath)
         const temporaryPath = this.filePath + '.tmp'
+        let totpSecret = null
+        if (typeof account.totpSecret === 'string' && account.totpSecret !== '') {
+            totpSecret = account.totpSecret
+        }
+
         const text = JSON.stringify({
             username: account.username,
             salt: account.salt,
-            hash: account.hash
+            hash: account.hash,
+            totpSecret: totpSecret
         }, null, 2) + '\n'
 
         await this.fs.mkdir(directory, {recursive: true, mode: 0o700})

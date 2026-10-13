@@ -3,6 +3,8 @@
 const form = document.getElementById('login-form')
 const errorLine = document.getElementById('login-error')
 const submitButton = document.getElementById('login-submit')
+const codeField = document.getElementById('code-field')
+const codeInput = document.getElementById('code')
 
 function showError(text) {
     errorLine.textContent = text
@@ -18,10 +20,28 @@ function setBusy(busy) {
     }
 }
 
+function askForCode() {
+    codeField.hidden = false
+    codeInput.required = true
+    codeInput.value = ''
+    codeInput.focus()
+}
+
+function withFullStop(text) {
+    if (text.endsWith('.')) {
+        return text
+    }
+    return text + '.'
+}
+
 async function signIn() {
     const credentials = {
         username: document.getElementById('username').value.trim(),
         password: document.getElementById('password').value
+    }
+
+    if (!codeField.hidden) {
+        credentials.code = codeInput.value.trim()
     }
 
     let response = null
@@ -41,18 +61,30 @@ async function signIn() {
         return
     }
 
+    let code = ''
     let message = 'Could not sign in.'
     try {
         const body = await response.json()
-        if (body.error && body.error.message) {
+        if (body.error) {
+            code = body.error.code
             message = body.error.message
         }
     } catch (e) {
         message = 'Could not sign in.'
     }
 
-    showError(message + (message.endsWith('.') ? '' : '.'))
-    document.getElementById('password').select()
+    if (code === 'TOTP_REQUIRED') {
+        askForCode()
+        return
+    }
+
+    showError(withFullStop(message))
+
+    if (code === 'INVALID_CODE') {
+        codeInput.select()
+    } else {
+        document.getElementById('password').select()
+    }
 }
 
 form.addEventListener('submit', async (event) => {

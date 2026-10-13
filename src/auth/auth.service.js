@@ -1,6 +1,18 @@
 import {createHash, timingSafeEqual} from 'node:crypto'
-import {BadRequestError, InvalidCredentialsError, TooManyAttemptsError, UnauthorizedError} from '../core/errors.js'
+import {
+    BadRequestError,
+    InvalidCodeError,
+    InvalidCredentialsError,
+    ServiceBusyError,
+    TooManyAttemptsError,
+    TotpRequiredError,
+    UnauthorizedError
+} from '../core/errors.js'
 import {checkNewPassword, hashPassword, verifyPassword} from './password.js'
+import {buildTotpUri, findTotpStep, generateTotpSecret} from './totp.js'
+
+const MAX_PASSWORD_CHECKS_AT_ONCE = 4
+const MAX_EVENTS = 50
 
 function textsAreEqual(first, second) {
     const firstDigest = createHash('sha256').update(first).digest()
@@ -10,16 +22,49 @@ function textsAreEqual(first, second) {
 }
 
 export class AuthService {
-    constructor(store, sessions, limiter) {
+    constructor(store, sessions, limiter, now, log) {
         this.store = store
         this.sessions = sessions
         this.limiter = limiter
+        this.now = now
+        this.log = log
+        this.events = []
+        this.activePasswordChecks = 0
+        this.lastTotpStep = 0
+        this.pendingTotpSecret = null
+    }
+
+    record(type, clientKey) {
+        this.events.unshift({
+            type: type,
+            address: clientKey,
+            time: new Date(this.now()).toISOString()
+        })
+
+        if (this.events.length > MAX_EVENTS) {
+            this.events.pop()
+        }
+
+        this.log('auth ' + type + ' address=' + clientKey)
+    }
+
+    listEvents() {
+        return this.events.slice()
     }
 
     checkNotLocked(clientKey) {
         const seconds = this.limiter.secondsUntilAllowed(clientKey)
         if (seconds > 0) {
             throw new TooManyAttemptsError(seconds)
+        }
+    }
+
+    recordFailure(type, clientKey) {
+        this.limiter.recordFailure(clientKey)
+        this.record(type, clientKey)
+
+        if (this.limiter.secondsUntilAllowed(clientKey) > 0) {
+            this.record('address_locked', clientKey)
         }
     }
 
@@ -32,7 +77,39 @@ export class AuthService {
         return account
     }
 
-    async login(username, password, clientKey) {
+    async checkPassword(password, account) {
+        if (this.activePasswordChecks >= MAX_PASSWORD_CHECKS_AT_ONCE) {
+            throw new ServiceBusyError()
+        }
+
+        this.activePasswordChecks = this.activePasswordChecks + 1
+        try {
+            return await verifyPassword(password, account)
+        } finally {
+            this.activePasswordChecks = this.activePasswordChecks - 1
+        }
+    }
+
+    useTotpCode(secret, code) {
+        const step = findTotpStep(secret, code, this.now())
+        if (step === null || step <= this.lastTotpStep) {
+            return false
+        }
+
+        this.lastTotpStep = step
+        return true
+    }
+
+    requireSession(token) {
+        const session = this.sessions.get(token)
+        if (session === null) {
+            throw new UnauthorizedError('Login required')
+        }
+
+        return session
+    }
+
+    async login(username, password, code, clientKey) {
         this.checkNotLocked(clientKey)
 
         if (typeof username !== 'string' || typeof password !== 'string') {
@@ -40,15 +117,27 @@ export class AuthService {
         }
 
         const account = await this.loadAccount()
-        const passwordMatches = await verifyPassword(password, account)
+        const passwordMatches = await this.checkPassword(password, account)
         const usernameMatches = textsAreEqual(username, account.username)
 
         if (!passwordMatches || !usernameMatches) {
-            this.limiter.recordFailure(clientKey)
+            this.recordFailure('login_failed', clientKey)
             throw new InvalidCredentialsError()
         }
 
+        if (account.totpSecret !== null) {
+            if (code === undefined || code === null || code === '') {
+                throw new TotpRequiredError()
+            }
+
+            if (!this.useTotpCode(account.totpSecret, code)) {
+                this.recordFailure('code_failed', clientKey)
+                throw new InvalidCodeError()
+            }
+        }
+
         this.limiter.recordSuccess(clientKey)
+        this.record('login', clientKey)
 
         return this.sessions.create(account.username)
     }
@@ -57,42 +146,112 @@ export class AuthService {
         return this.sessions.get(token)
     }
 
-    logout(token) {
+    async getStatus(token) {
+        const session = this.requireSession(token)
+        const account = await this.loadAccount()
+
+        return {
+            username: session.username,
+            totpEnabled: account.totpSecret !== null
+        }
+    }
+
+    logout(token, clientKey) {
+        if (this.sessions.get(token) !== null) {
+            this.record('logout', clientKey)
+        }
+
         this.sessions.delete(token)
     }
 
-    async changePassword(token, currentPassword, newPassword, clientKey) {
-        const session = this.sessions.get(token)
-        if (session === null) {
-            throw new UnauthorizedError('Login required')
-        }
-
+    async confirmPassword(password, clientKey) {
         this.checkNotLocked(clientKey)
 
-        if (typeof currentPassword !== 'string') {
+        if (typeof password !== 'string') {
             throw new BadRequestError('The current password is required')
         }
 
-        checkNewPassword(newPassword)
-
         const account = await this.loadAccount()
-        const passwordMatches = await verifyPassword(currentPassword, account)
+        const passwordMatches = await this.checkPassword(password, account)
 
         if (!passwordMatches) {
-            this.limiter.recordFailure(clientKey)
+            this.recordFailure('password_check_failed', clientKey)
             throw new InvalidCredentialsError()
         }
 
+        return account
+    }
+
+    async changePassword(token, currentPassword, newPassword, clientKey) {
+        this.requireSession(token)
+        checkNewPassword(newPassword)
+
+        const account = await this.confirmPassword(currentPassword, clientKey)
         const hashed = await hashPassword(newPassword)
+
         await this.store.save({
             username: account.username,
             salt: hashed.salt,
-            hash: hashed.hash
+            hash: hashed.hash,
+            totpSecret: account.totpSecret
         })
 
         this.limiter.recordSuccess(clientKey)
+        this.record('password_changed', clientKey)
         this.sessions.clear()
 
         return this.sessions.create(account.username)
+    }
+
+    async startTotpSetup(token, currentPassword, clientKey) {
+        this.requireSession(token)
+
+        const account = await this.confirmPassword(currentPassword, clientKey)
+        this.pendingTotpSecret = generateTotpSecret()
+
+        return {
+            secret: this.pendingTotpSecret,
+            uri: buildTotpUri(this.pendingTotpSecret, account.username)
+        }
+    }
+
+    async enableTotp(token, code, clientKey) {
+        this.requireSession(token)
+        this.checkNotLocked(clientKey)
+
+        if (this.pendingTotpSecret === null) {
+            throw new BadRequestError('Start the setup first')
+        }
+
+        if (!this.useTotpCode(this.pendingTotpSecret, code)) {
+            this.recordFailure('code_failed', clientKey)
+            throw new InvalidCodeError()
+        }
+
+        const account = await this.loadAccount()
+        await this.store.save({
+            username: account.username,
+            salt: account.salt,
+            hash: account.hash,
+            totpSecret: this.pendingTotpSecret
+        })
+
+        this.pendingTotpSecret = null
+        this.record('two_step_enabled', clientKey)
+    }
+
+    async disableTotp(token, currentPassword, clientKey) {
+        this.requireSession(token)
+
+        const account = await this.confirmPassword(currentPassword, clientKey)
+        await this.store.save({
+            username: account.username,
+            salt: account.salt,
+            hash: account.hash,
+            totpSecret: null
+        })
+
+        this.pendingTotpSecret = null
+        this.record('two_step_disabled', clientKey)
     }
 }

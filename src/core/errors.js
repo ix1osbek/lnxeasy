@@ -90,3 +90,35 @@ export class TooManyAttemptsError extends AppError {
         this.retryAfterSeconds = retryAfterSeconds
     }
 }
+
+
+export class TotpRequiredError extends AppError {
+    constructor() {
+        super(401, 'TOTP_REQUIRED', 'Enter the 6-digit code from your authenticator app')
+        this.name = 'TotpRequiredError'
+    }
+}
+
+
+export class InvalidCodeError extends AppError {
+    constructor() {
+        super(401, 'INVALID_CODE', 'Wrong or expired code')
+        this.name = 'InvalidCodeError'
+    }
+}
+
+
+export class RateLimitedError extends AppError {
+    constructor() {
+        super(429, 'RATE_LIMITED', 'Too many requests. Slow down and try again in a minute.')
+        this.name = 'RateLimitedError'
+    }
+}
+
+
+export class ServiceBusyError extends AppError {
+    constructor() {
+        super(503, 'BUSY', 'The server is busy. Try again in a moment.')
+        this.name = 'ServiceBusyError'
+    }
+}

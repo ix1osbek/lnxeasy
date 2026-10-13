@@ -30,6 +30,12 @@
             <input class="input" id="password" name="password" type="password" autocomplete="current-password" required>
         </label>
 
+        <label class="field" id="code-field" hidden>
+            <span class="field-label">Code from your authenticator app</span>
+            <input class="input input-code" id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code"
+                   maxlength="7" spellcheck="false">
+        </label>
+
         <p class="form-error" id="login-error" role="alert" hidden></p>
 
         <button class="button button-primary button-wide" id="login-submit" type="submit">Sign in</button>

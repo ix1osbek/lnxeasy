@@ -16,9 +16,16 @@ import {LoginLimiter} from './src/auth/limiter.js'
 import {AuthService} from './src/auth/auth.service.js'
 import {AccessGuard} from './src/auth/guard.js'
 import {regAuthRoutes} from './src/auth/auth.routes.js'
+import {AddressFilter} from './src/http/address.js'
+import {RequestLimiter} from './src/http/rate.js'
 
 const SESSION_COOKIE_NAME = 'lnxeasy_session'
 const SESSION_LIFETIME_SECONDS = 24 * 60 * 60
+const MAX_REQUESTS_PER_MINUTE = 300
+const MAX_CONNECTIONS = 200
+const HEADERS_TIMEOUT_MS = 10 * 1000
+const REQUEST_TIMEOUT_MS = 30 * 1000
+const KEEP_ALIVE_TIMEOUT_MS = 5 * 1000
 
 function stop(message) {
     console.error(message)
@@ -46,7 +53,7 @@ if ((await authStore.load()) === null) {
 
 const now = () => Date.now()
 const sessions = new SessionStore(SESSION_LIFETIME_SECONDS * 1000, now)
-const authService = new AuthService(authStore, sessions, new LoginLimiter(now))
+const authService = new AuthService(authStore, sessions, new LoginLimiter(now), now, console.log)
 const guard = new AccessGuard(authService, SESSION_COOKIE_NAME)
 
 const router = new Router()
@@ -63,7 +70,10 @@ regModules(router, {os: os, readFile: fs.readFile, run: run})
 const publicDirectory = path.join(import.meta.dirname, 'public')
 const staticFiles = new StaticFiles(publicDirectory, fs.readFile)
 
-const app = new App(router, staticFiles, guard)
+const requestLimiter = new RequestLimiter(MAX_REQUESTS_PER_MINUTE, 60 * 1000, now)
+const addressFilter = new AddressFilter(config.allowedAddresses)
+
+const app = new App(router, staticFiles, guard, requestLimiter)
 
 let server = null
 let scheme = 'http'
@@ -78,6 +88,17 @@ if (config.tls === null) {
     })
 }
 
+server.maxConnections = MAX_CONNECTIONS
+server.headersTimeout = HEADERS_TIMEOUT_MS
+server.requestTimeout = REQUEST_TIMEOUT_MS
+server.keepAliveTimeout = KEEP_ALIVE_TIMEOUT_MS
+
+server.on('connection', (socket) => {
+    if (!addressFilter.allows(socket.remoteAddress)) {
+        socket.destroy()
+    }
+})
+
 server.on('request', (req, res) => {
     app.handle(req, res)
 })
@@ -85,4 +106,8 @@ server.on('request', (req, res) => {
 server.listen(config.port, config.host, () => {
     const address = server.address()
     console.log(`Server started on ${scheme}://${address.address}:${address.port}`)
+
+    if (config.allowedAddresses.length > 0) {
+        console.log('Only these addresses may connect: ' + config.allowedAddresses.join(', '))
+    }
 })
