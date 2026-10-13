@@ -1,13 +1,13 @@
 import {parsePorts} from './ports.parser.js'
 
 export class PortsService {
-    constructor(run) {
-        this.run = run
+    constructor(source) {
+        this.source = source
     }
 
-    async list(){
-        const result = await this.run('ss' , ['-tulpnH'])
+    async list() {
+        const text = await this.source.read()
 
-        return parsePorts(result.stdout)
+        return parsePorts(text)
     }
 }

@@ -5,11 +5,12 @@ const LOGIN_PATH = '/login'
 const LOGIN_FILE = '/login.html'
 
 export class App {
-    constructor(router, staticFiles, guard, requestLimiter) {
+    constructor(router, staticFiles, guard, requestLimiter, clientPolicy) {
         this.router = router
         this.staticFiles = staticFiles
         this.guard = guard
         this.requestLimiter = requestLimiter
+        this.clientPolicy = clientPolicy
     }
 
     async handleApi(req, res, path) {
@@ -42,6 +43,13 @@ export class App {
     }
 
     async handle(req, res) {
+        req.clientAddress = this.clientPolicy.identify(req)
+
+        if (!this.clientPolicy.allows(req.clientAddress)) {
+            req.socket.destroy()
+            return
+        }
+
         try {
             this.requestLimiter.check(req)
 

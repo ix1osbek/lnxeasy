@@ -4,7 +4,7 @@ You are about to run lnxeasy on a server, as a service that is reachable over th
 You should not have to take anyone's word that it is safe. This document shows where everything
 is, in the order things happen, so that you can read the code yourself in about half an hour.
 
-The server side is about 2,100 lines of JavaScript with no dependencies, plus one shell script
+The server side is about 2,300 lines of JavaScript with no dependencies, plus one shell script
 that installs it. There is no build step: the files in the repository are the files that run.
 
 - [The ten-minute check](#the-ten-minute-check)
@@ -34,7 +34,7 @@ grep -rnE "\brun\(" server.js cli.js src | grep -v "export function"
 
 ```
 src/core/exec.js:1:import {execFile} from 'node:child_process'
-src/modules/ports/ports.service.js:9:        const result = await this.run('ss' , ['-tulpnH'])
+src/modules/ports/ports.source.js:36:        const result = await this.run('ss', ['-tulpnH'])
 cli.js:70:        await run('systemctl', ['restart', service])
 ```
 
@@ -42,13 +42,18 @@ One file may start programs. It is used twice: `ss -tulpnH` to list ports, and
 `systemctl restart lnxeasy.service` from the command line tool. `execFile` does not use a shell,
 and nothing a visitor sends is part of either command.
 
-**It never connects out to anything.**
+**It never connects out to another machine.**
 
 ```bash
 grep -rnE "fetch\(|http\.request|https\.request|http\.get|https\.get|net\.connect|createConnection|dgram|WebSocket" server.js cli.js src
 ```
 
-No output. The server only answers requests. It does not call home, check for updates or send statistics.
+```
+src/core/socket.js:24:        const socket = net.createConnection({path: socketPath})
+```
+
+One line, and it opens a local socket file, not a network address: it reads the port list from the
+helper described in section 1. The server does not call home, check for updates or send statistics.
 
 **It never runs text as code.**
 
@@ -111,10 +116,11 @@ src/
   core/
     errors.js           The error types, each with an HTTP status and a code.
     exec.js             The one place that starts another program.
+    socket.js           Reads text from a local socket file (the helper).
 
   http/                 Knows about requests and responses, nothing about Linux.
     app.js              Every request enters here. Decides: limit, login, page or API.
-    address.js          The address list ("only these IPs may connect").
+    address.js          The address list ("only these IPs may connect") and the proxy rule.
     rate.js             Requests per address per minute.
     router.js           Method + path -> handler.
     static.js           Serves the files in public/ and nothing outside it.
@@ -135,10 +141,10 @@ src/
   modules/              One folder per feature. Knows about Linux, nothing about HTTP.
     index.js            The list of modules.
     system/             Uptime, CPU, memory: reads /proc and node:os.
-    ports/              Listening ports: runs ss and parses its output.
+    ports/              Listening ports: asks the helper (or runs ss) and parses the output.
 
 public/                 The page: plain HTML, CSS and JavaScript.
-tests/                  164 tests, run with "npm test".
+tests/                  180 tests, run with "npm test".
 ```
 
 Imports go one way: `http/` and `auth/` may use `core/`, `modules/` may use `core/`,
@@ -160,9 +166,28 @@ in order. Each step is one function.
 | 7 | `create_certificate` | Creates a self-signed certificate with `openssl`, or copies yours if you passed `--cert` and `--key`. The key is readable by root and the `lnxeasy` group only. |
 | 8 | `write_command` | Writes `/usr/local/bin/lnxeasy`, a four-line wrapper that loads the settings and runs `cli.js`. |
 | 9 | `create_account` | On the first install only: generates a random password, stores its hash, keeps the password in a variable to print at the end. |
-| 10 | `write_unit` | Writes the systemd unit. It runs the service as `lnxeasy` with `NoNewPrivileges`, a read-only file system (`ProtectSystem=strict`), no access to `/home`, and a private `/tmp`. |
-| 11 | `start_service` | `systemctl enable` and `restart`. |
-| 12 | `print_summary` | Waits until the service answers, then prints the address, the password and the certificate fingerprint. |
+| 10 | `write_helper_units` | Writes the two units of the helper that reads process names. See below. |
+| 11 | `write_unit` | Writes the systemd unit. It runs the service as `lnxeasy` with `NoNewPrivileges`, a read-only file system (`ProtectSystem=strict`), no access to `/home`, and a private `/tmp`. |
+| 12 | `start_helper`, `start_service` | `systemctl enable` and `restart`. |
+| 13 | `print_summary` | Waits until the service answers, then prints the address, the password and the certificate fingerprint. |
+
+### The helper: the only thing that runs as root
+
+Linux shows the process behind a port only to that process's owner or to root, and lnxeasy is neither.
+Instead of running the whole service as root, the installer adds one small root-owned piece
+(`write_helper_units` in `install.sh`, about 50 lines):
+
+- `lnxeasy-helper.socket` makes systemd listen on the socket file `/run/lnxeasy/helper.sock`.
+  Only root and the `lnxeasy` group can open it.
+- `lnxeasy-helper@.service` is started by systemd for each connection. Its whole job is one line:
+  `ExecStart=/usr/bin/ss -tulpnH`. Its input is `null`, so whatever is sent to the socket is thrown away;
+  its output goes back through the socket. It may hold two capabilities and nothing else, cannot write to
+  the file system, and is stopped after ten seconds at most.
+
+So the part that faces the network has no privileges, and the part that has privileges cannot be told
+what to do. If lnxeasy were taken over completely, the most it could get from the helper is the list of
+listening ports. When the helper is missing or silent, lnxeasy runs `ss` itself and simply shows fewer
+process names (`src/modules/ports/ports.source.js`).
 
 Everything it creates:
 
@@ -174,6 +199,7 @@ Everything it creates:
 | `/etc/lnxeasy/tls/` | Certificate and key |
 | `/var/lib/lnxeasy/auth.json` | The admin account: username, password hash, two-step secret |
 | `/etc/systemd/system/lnxeasy.service` | The service |
+| `/etc/systemd/system/lnxeasy-helper.socket`, `lnxeasy-helper@.service` | The helper |
 | `/usr/local/bin/lnxeasy` | The command |
 | user `lnxeasy` | The account the service runs as |
 
@@ -188,8 +214,8 @@ files outside the table above.
 File: [`server.js`](server.js). It runs top to bottom, once.
 
 1. **Read the settings** with `loadConfig` ([`src/config.js`](src/config.js)): `HOST`, `PORT`,
-   `AUTH_FILE`, `TLS_CERT_FILE`, `TLS_KEY_FILE`, `ALLOWED_IPS`. This is the only place that reads
-   environment variables.
+   `AUTH_FILE`, `TLS_CERT_FILE`, `TLS_KEY_FILE`, `ALLOWED_IPS`, `TRUSTED_PROXIES`, `HELPER_SOCKET`.
+   This is the only place that reads environment variables.
 2. **Refuse to start unsafely.** If the address is public and there is no certificate, it prints why
    and exits. If there is no admin account, it prints how to create one and exits.
 3. **Build the login parts**: account file, session store, login limiter, auth service, access guard.
@@ -199,9 +225,15 @@ File: [`server.js`](server.js). It runs top to bottom, once.
 6. **Listen.** On every new connection, before any data is read, the address filter runs
    (`server.on('connection', ...)`): an address that is not on your list is disconnected without an answer.
 
+Behind a web server (`--behind-proxy`) every connection comes from that web server, so the visitor's
+real address has to be read from the `X-Forwarded-For` header. `ClientPolicy.identify` in
+[`src/http/address.js`](src/http/address.js) does that, and only when the connection comes from an
+address listed in `TRUSTED_PROXIES`. From anyone else the header is ignored, so a visitor cannot
+pretend to be another address.
+
 ## 3. The life of one request
 
-Every request goes through `App.handle` in [`src/http/app.js`](src/http/app.js). The whole method is 20 lines.
+Every request goes through `App.handle` in [`src/http/app.js`](src/http/app.js). The whole method is under 30 lines.
 The order of the checks is the order below.
 
 | # | Check | File | If it fails |
@@ -258,7 +290,7 @@ the only other way to change the password is the `lnxeasy passwd` command on the
 | Hostname, address, kernel, uptime, CPU | Node.js `os` module | [`src/modules/system/system.service.js`](src/modules/system/system.service.js) |
 | Load average | reads `/proc/loadavg` | same |
 | Memory and swap | reads `/proc/meminfo` | same |
-| Listening ports and processes | runs `ss -tulpnH` | [`src/modules/ports/ports.service.js`](src/modules/ports/ports.service.js) |
+| Listening ports and processes | output of `ss -tulpnH`, from the helper or run directly | [`src/modules/ports/ports.source.js`](src/modules/ports/ports.source.js) |
 
 That is the complete list. Nothing else on the server is read: no files in `/home`, no logs,
 no other configuration. The two `*.parser.js` files only turn text into objects.

@@ -9,30 +9,27 @@ const SS_TEXT = [
     '',
 ].join('\n')
 
-// A fake run: remembers how it was called and answers with fixed text instead of starting ss.
-function createFakeRun(stdout) {
-    const calls = []
-
-    const run = async (command, args) => {
-        calls.push({ command: command, args: args })
-        return { stdout: stdout, stderr: '' }
+// A fake source: answers with fixed text instead of asking the system.
+function createFakeSource(text) {
+    const source = { reads: 0 }
+    source.read = async () => {
+        source.reads = source.reads + 1
+        return text
     }
-
-    return { run: run, calls: calls }
+    return source
 }
 
-test('list runs ss once with the listening sockets flags', async () => {
-    const fake = createFakeRun(SS_TEXT)
-    const service = new PortsService(fake.run)
+test('list reads the source once', async () => {
+    const source = createFakeSource(SS_TEXT)
+    const service = new PortsService(source)
 
     await service.list()
 
-    assert.deepEqual(fake.calls, [{ command: 'ss', args: ['-tulpnH'] }])
+    assert.equal(source.reads, 1)
 })
 
 test('list returns the parsed ports', async () => {
-    const fake = createFakeRun(SS_TEXT)
-    const service = new PortsService(fake.run)
+    const service = new PortsService(createFakeSource(SS_TEXT))
 
     const ports = await service.list()
 
@@ -43,17 +40,18 @@ test('list returns the parsed ports', async () => {
 })
 
 test('list returns an empty list when nothing is listening', async () => {
-    const fake = createFakeRun('')
-    const service = new PortsService(fake.run)
+    const service = new PortsService(createFakeSource(''))
 
     assert.deepEqual(await service.list(), [])
 })
 
-test('list lets an error from run pass through', async () => {
-    const run = async () => {
-        throw new CommandNotFoundError('ss')
+test('list lets an error from the source pass through', async () => {
+    const source = {
+        read: async () => {
+            throw new CommandNotFoundError('ss')
+        },
     }
-    const service = new PortsService(run)
+    const service = new PortsService(source)
 
     await assert.rejects(service.list(), (error) => {
         assert.equal(error instanceof CommandNotFoundError, true)
@@ -61,9 +59,8 @@ test('list lets an error from run pass through', async () => {
     })
 })
 
-test('list fails when ss prints something unexpected', async () => {
-    const fake = createFakeRun('this is not ss output\n')
-    const service = new PortsService(fake.run)
+test('list fails when the source gives something unexpected', async () => {
+    const service = new PortsService(createFakeSource('this is not ss output\n'))
 
     await assert.rejects(service.list(), {
         message: 'Unexpected ss output: this is not ss output',

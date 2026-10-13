@@ -10,13 +10,14 @@ import {StaticFiles} from './src/http/static.js'
 import {sendJson} from './src/http/response.js'
 import {regModules} from './src/modules/index.js'
 import {run} from './src/core/exec.js'
+import {readSocket} from './src/core/socket.js'
 import {AuthStore} from './src/auth/store.js'
 import {SessionStore} from './src/auth/sessions.js'
 import {LoginLimiter} from './src/auth/limiter.js'
 import {AuthService} from './src/auth/auth.service.js'
 import {AccessGuard} from './src/auth/guard.js'
 import {regAuthRoutes} from './src/auth/auth.routes.js'
-import {AddressFilter} from './src/http/address.js'
+import {AddressFilter, ClientPolicy} from './src/http/address.js'
 import {RequestLimiter} from './src/http/rate.js'
 
 const SESSION_COOKIE_NAME = 'lnxeasy_session'
@@ -63,17 +64,23 @@ router.get('/api/health', (req, res) => {
 regAuthRoutes(router, authService, {
     name: SESSION_COOKIE_NAME,
     maxAgeSeconds: SESSION_LIFETIME_SECONDS,
-    secure: config.tls !== null
+    secure: config.tls !== null || config.trustedProxies.length > 0
 })
-regModules(router, {os: os, readFile: fs.readFile, run: run})
+regModules(router, {
+    os: os,
+    readFile: fs.readFile,
+    run: run,
+    readSocket: readSocket,
+    helperSocket: config.helperSocket
+})
 
 const publicDirectory = path.join(import.meta.dirname, 'public')
 const staticFiles = new StaticFiles(publicDirectory, fs.readFile)
 
 const requestLimiter = new RequestLimiter(MAX_REQUESTS_PER_MINUTE, 60 * 1000, now)
-const addressFilter = new AddressFilter(config.allowedAddresses)
+const clientPolicy = new ClientPolicy(new AddressFilter(config.allowedAddresses), config.trustedProxies)
 
-const app = new App(router, staticFiles, guard, requestLimiter)
+const app = new App(router, staticFiles, guard, requestLimiter, clientPolicy)
 
 let server = null
 let scheme = 'http'
@@ -94,7 +101,7 @@ server.requestTimeout = REQUEST_TIMEOUT_MS
 server.keepAliveTimeout = KEEP_ALIVE_TIMEOUT_MS
 
 server.on('connection', (socket) => {
-    if (!addressFilter.allows(socket.remoteAddress)) {
+    if (!clientPolicy.allowsConnection(socket.remoteAddress)) {
         socket.destroy()
     }
 })
@@ -109,5 +116,9 @@ server.listen(config.port, config.host, () => {
 
     if (config.allowedAddresses.length > 0) {
         console.log('Only these addresses may connect: ' + config.allowedAddresses.join(', '))
+    }
+
+    if (config.trustedProxies.length > 0) {
+        console.log('Trusting the client address sent by these proxies: ' + config.trustedProxies.join(', '))
     }
 })
