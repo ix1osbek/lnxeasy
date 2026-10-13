@@ -166,3 +166,56 @@ test('handle does not log a 404', async (t) => {
 
     assert.equal(errorLog.mock.callCount(), 0)
 })
+
+// A fake StaticFiles: remembers the paths it was asked to serve.
+function createFakeStaticFiles() {
+    const served = []
+
+    const serve = async (req, res, path) => {
+        served.push(path)
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+        res.end('<h1>page</h1>')
+    }
+
+    return { serve: serve, served: served }
+}
+
+test('handle serves a file for a path outside /api/', async () => {
+    const staticFiles = createFakeStaticFiles()
+    const app = new App(new Router(), staticFiles)
+    const res = createFakeResponse()
+
+    await app.handle(createFakeRequest('GET', '/styles.css?v=2'), res)
+
+    assert.deepEqual(staticFiles.served, ['/styles.css'])
+    assert.equal(res.statusCode, 200)
+    assert.equal(res.body, '<h1>page</h1>')
+})
+
+test('handle does not ask for a file when the path is under /api/', async () => {
+    const staticFiles = createFakeStaticFiles()
+    const app = new App(new Router(), staticFiles)
+    const res = createFakeResponse()
+
+    await app.handle(createFakeRequest('GET', '/api/unknown'), res)
+
+    assert.deepEqual(staticFiles.served, [])
+    assert.equal(res.statusCode, 404)
+})
+
+test('handle turns a missing file into a 404 response', async () => {
+    const staticFiles = {
+        serve: async (req, res, path) => {
+            throw new AppError(404, 'NOT_FOUND', 'File not found: ' + path)
+        },
+    }
+    const app = new App(new Router(), staticFiles)
+    const res = createFakeResponse()
+
+    await app.handle(createFakeRequest('GET', '/nope.html'), res)
+
+    assert.equal(res.statusCode, 404)
+    assert.deepEqual(JSON.parse(res.body), {
+        error: { code: 'NOT_FOUND', message: 'File not found: /nope.html' },
+    })
+})

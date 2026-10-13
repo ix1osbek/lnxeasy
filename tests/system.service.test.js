@@ -14,6 +14,16 @@ function createFakeOs() {
             { model: 'Test CPU', speed: 2400 },
             { model: 'Test CPU', speed: 2400 },
         ],
+        networkInterfaces: () => {
+            return {
+                lo: [{ address: '127.0.0.1', family: 'IPv4', internal: true }],
+                eth0: [
+                    { address: 'fe80::1', family: 'IPv6', internal: false },
+                    { address: '203.0.113.10', family: 'IPv4', internal: false },
+                ],
+                docker0: [{ address: '172.17.0.1', family: 'IPv4', internal: false }],
+            }
+        },
     }
 }
 
@@ -48,6 +58,7 @@ test('getInfo returns the full system information', async () => {
 
     assert.deepEqual(info, {
         hostname: 'test-server',
+        ipAddress: '203.0.113.10',
         platform: 'linux',
         release: '6.8.0-test',
         arch: 'x64',
@@ -129,4 +140,24 @@ test('getInfo fails when a proc file has unexpected content', async () => {
     const service = new SystemService(createFakeOs(), readFile)
 
     await assert.rejects(() => service.getInfo(), Error)
+})
+
+test('getInfo picks the first IPv4 address that is not internal', async () => {
+    const service = new SystemService(createFakeOs(), createFakeReadFile())
+
+    const info = await service.getInfo()
+
+    assert.equal(info.ipAddress, '203.0.113.10')
+})
+
+test('getInfo returns null as the IP address when only loopback exists', async () => {
+    const fakeOs = createFakeOs()
+    fakeOs.networkInterfaces = () => {
+        return { lo: [{ address: '127.0.0.1', family: 'IPv4', internal: true }] }
+    }
+    const service = new SystemService(fakeOs, createFakeReadFile())
+
+    const info = await service.getInfo()
+
+    assert.equal(info.ipAddress, null)
 })
