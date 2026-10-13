@@ -38,6 +38,8 @@
             <span id="status-text">Connecting</span>
         </span>
         <button class="button" id="toggle-refresh" type="button">Pause</button>
+        <button class="button" id="open-security" type="button">Security</button>
+        <button class="button" id="sign-out" type="button">Sign out</button>
     </div>
 </header>
 
@@ -174,6 +176,95 @@
     <span>lnxeasy — Linux made easy</span>
     <span>Read-only view · refreshes every 5 seconds</span>
 </footer>
+
+<dialog class="dialog" id="security-dialog">
+    <div class="dialog-head">
+        <h2 class="dialog-title">Security</h2>
+        <button class="icon-button" id="security-close" type="button" aria-label="Close">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18"/>
+            </svg>
+        </button>
+    </div>
+
+    <div class="dialog-body">
+        <form class="dialog-section" id="password-form">
+            <h3 class="dialog-subtitle">Change password</h3>
+
+            <label class="field">
+                <span class="field-label">Current password</span>
+                <input class="input" id="current-password" type="password" autocomplete="current-password" required>
+            </label>
+
+            <label class="field">
+                <span class="field-label">New password</span>
+                <input class="input" id="new-password" type="password" autocomplete="new-password" minlength="12" required>
+                <span class="field-hint">At least 12 characters, not a common word or a simple sequence.</span>
+            </label>
+
+            <label class="field">
+                <span class="field-label">Repeat the new password</span>
+                <input class="input" id="repeat-password" type="password" autocomplete="new-password" minlength="12" required>
+            </label>
+
+            <p class="form-error" id="password-error" role="alert" hidden></p>
+            <p class="form-success" id="password-success" hidden>The password was changed. Other devices were signed out.</p>
+
+            <div class="dialog-actions">
+                <button class="button button-primary" id="password-submit" type="submit">Change password</button>
+            </div>
+        </form>
+
+        <section class="dialog-section">
+            <h3 class="dialog-subtitle">Two-step sign-in <span class="badge" id="two-step-badge"></span></h3>
+            <p class="dialog-text" id="two-step-text"></p>
+
+            <form id="two-step-start-form">
+                <label class="field">
+                    <span class="field-label">Current password</span>
+                    <input class="input" id="two-step-password" type="password" autocomplete="current-password" required>
+                </label>
+                <div class="dialog-actions">
+                    <button class="button button-primary" id="two-step-start" type="submit"></button>
+                </div>
+            </form>
+
+            <form id="two-step-confirm-form" hidden>
+                <p class="dialog-text">
+                    Add a new account in your authenticator app and type this key, or
+                    <a id="two-step-link" href="#">open it on this device</a>.
+                </p>
+                <p class="secret-key" id="two-step-secret"></p>
+                <label class="field">
+                    <span class="field-label">6-digit code from the app</span>
+                    <input class="input input-code" id="two-step-code" type="text" inputmode="numeric" autocomplete="one-time-code"
+                           maxlength="7" spellcheck="false" required>
+                </label>
+                <div class="dialog-actions">
+                    <button class="button button-primary" type="submit">Turn on</button>
+                </div>
+            </form>
+
+            <p class="form-error" id="two-step-error" role="alert" hidden></p>
+            <p class="form-success" id="two-step-success" hidden></p>
+        </section>
+
+        <section class="dialog-section">
+            <h3 class="dialog-subtitle">Recent activity</h3>
+            <p class="dialog-text">Sign-ins and failed attempts since lnxeasy was last started. The full history is in the server log.</p>
+            <table class="table table-compact">
+                <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Event</th>
+                    <th>Address</th>
+                </tr>
+                </thead>
+                <tbody id="events-body"></tbody>
+            </table>
+        </section>
+    </div>
+</dialog>
 
 <script src="/app.js"></script>
 </body>

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>Sign in · lnxeasy</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="login-page">
+<main class="login">
+    <div class="login-brand">
+        <img class="login-mark" src="/favicon.svg" alt="">
+        <span class="brand-name">lnx<em>easy</em></span>
+    </div>
+
+    <form class="login-card" id="login-form" autocomplete="on">
+        <h1 class="login-title">Sign in</h1>
+        <p class="login-note">Use the username and password that the installer printed.</p>
+
+        <label class="field">
+            <span class="field-label">Username</span>
+            <input class="input" id="username" name="username" type="text" autocomplete="username"
+                   autocapitalize="none" spellcheck="false" required autofocus>
+        </label>
+
+        <label class="field">
+            <span class="field-label">Password</span>
+            <input class="input" id="password" name="password" type="password" autocomplete="current-password" required>
+        </label>
+
+        <label class="field" id="code-field" hidden>
+            <span class="field-label">Code from your authenticator app</span>
+            <input class="input input-code" id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code"
+                   maxlength="7" spellcheck="false">
+        </label>
+
+        <p class="form-error" id="login-error" role="alert" hidden></p>
+
+        <button class="button button-primary button-wide" id="login-submit" type="submit">Sign in</button>
+    </form>
+
+    <p class="login-foot">Forgot the password? Run <code>sudo lnxeasy passwd</code> on the server.</p>
+</main>
+
+<script src="/login.js"></script>
+</body>
+</html>

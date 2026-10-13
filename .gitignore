@@ -1,8 +1,9 @@
 # Dependencies
 node_modules/
 
-# Local configuration
+# Local configuration and the admin account
 .env
+data/
 
 # Logs
 *.log

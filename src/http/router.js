@@ -19,6 +19,11 @@ export class Router {
     }
 
 
+    post(path, handler) {
+        this.add('POST', path, handler)
+    }
+
+
     match(method , path){
         for (const route of this.routes){
             if (route.method === method.toUpperCase() && route.path === path){

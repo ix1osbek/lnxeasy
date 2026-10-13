@@ -60,6 +60,38 @@ async function fetchData(path) {
     }
 
     if (body.error) {
+        if (body.error.code === 'UNAUTHORIZED') {
+            window.location.replace('/login')
+        }
+        throw createApiError(body.error.code, body.error.message)
+    }
+
+    return body.data
+}
+
+async function postData(path, data) {
+    let response = null
+    try {
+        response = await fetch(path, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        })
+    } catch (e) {
+        throw createApiError('OFFLINE', 'The server does not answer.')
+    }
+
+    let body = null
+    try {
+        body = await response.json()
+    } catch (e) {
+        throw createApiError('BAD_RESPONSE', 'The server sent an answer that is not JSON.')
+    }
+
+    if (body.error) {
+        if (body.error.code === 'UNAUTHORIZED') {
+            window.location.replace('/login')
+        }
         throw createApiError(body.error.code, body.error.message)
     }
 
@@ -679,6 +711,215 @@ byId('toggle-refresh').addEventListener('click', () => {
         refresh()
     }
 })
+
+byId('sign-out').addEventListener('click', async () => {
+    try {
+        await postData('/api/auth/logout', {})
+    } catch (error) {
+        window.location.replace('/login')
+        return
+    }
+    window.location.replace('/login')
+})
+
+const EVENT_LABELS = {
+    login: 'Signed in',
+    logout: 'Signed out',
+    login_failed: 'Wrong username or password',
+    code_failed: 'Wrong two-step code',
+    password_check_failed: 'Wrong current password',
+    address_locked: 'Address locked for 15 minutes',
+    password_changed: 'Password changed',
+    two_step_enabled: 'Two-step sign-in turned on',
+    two_step_disabled: 'Two-step sign-in turned off'
+}
+
+const BAD_EVENTS = ['login_failed', 'code_failed', 'password_check_failed', 'address_locked']
+
+const security = {
+    twoStepEnabled: false
+}
+
+function showFormMessage(id, text) {
+    setText(id, text)
+    byId(id).hidden = false
+}
+
+function describeFormError(error) {
+    if (error.code === 'INVALID_CREDENTIALS') {
+        return 'The current password is wrong.'
+    }
+    if (error.message.endsWith('.')) {
+        return error.message
+    }
+    return error.message + '.'
+}
+
+function formatSecret(secret) {
+    const groups = []
+    for (let index = 0; index < secret.length; index = index + 4) {
+        groups.push(secret.slice(index, index + 4))
+    }
+    return groups.join(' ')
+}
+
+function renderTwoStep() {
+    const badge = byId('two-step-badge')
+    badge.classList.toggle('is-on', security.twoStepEnabled)
+    badge.classList.toggle('is-off', !security.twoStepEnabled)
+
+    byId('two-step-start-form').hidden = false
+    byId('two-step-confirm-form').hidden = true
+    byId('two-step-start-form').reset()
+    byId('two-step-confirm-form').reset()
+
+    if (security.twoStepEnabled) {
+        badge.textContent = 'On'
+        setText('two-step-text', 'Signing in needs the password and a code from your authenticator app.')
+        setText('two-step-start', 'Turn off')
+    } else {
+        badge.textContent = 'Off'
+        setText('two-step-text', 'Ask for a 6-digit code from an authenticator app on your phone after the password. A stolen password alone is then not enough.')
+        setText('two-step-start', 'Set up')
+    }
+}
+
+function renderEvents(events) {
+    const body = byId('events-body')
+    body.textContent = ''
+
+    for (const event of events) {
+        const row = document.createElement('tr')
+        let label = EVENT_LABELS[event.type]
+        if (label === undefined) {
+            label = event.type
+        }
+
+        const labelCell = createElement('td', '', label)
+        if (BAD_EVENTS.includes(event.type)) {
+            labelCell.className = 'event-bad'
+        }
+
+        row.appendChild(createElement('td', '', new Date(event.time).toLocaleString()))
+        row.appendChild(labelCell)
+        row.appendChild(createElement('td', '', event.address))
+        body.appendChild(row)
+    }
+}
+
+async function loadSecurity() {
+    try {
+        const status = await fetchData('/api/auth/session')
+        security.twoStepEnabled = status.totpEnabled
+        renderTwoStep()
+        renderEvents(await fetchData('/api/auth/events'))
+    } catch (error) {
+        showFormMessage('two-step-error', describeFormError(error))
+    }
+}
+
+function resetSecurityDialog() {
+    byId('password-form').reset()
+    for (const id of ['password-error', 'password-success', 'two-step-error', 'two-step-success']) {
+        byId(id).hidden = true
+    }
+    byId('password-submit').disabled = false
+}
+
+byId('open-security').addEventListener('click', () => {
+    resetSecurityDialog()
+    renderTwoStep()
+    byId('security-dialog').showModal()
+    loadSecurity()
+})
+
+byId('security-close').addEventListener('click', () => {
+    byId('security-dialog').close()
+})
+
+byId('password-form').addEventListener('submit', async (event) => {
+    event.preventDefault()
+    byId('password-error').hidden = true
+    byId('password-success').hidden = true
+
+    const currentPassword = byId('current-password').value
+    const newPassword = byId('new-password').value
+
+    if (newPassword !== byId('repeat-password').value) {
+        showFormMessage('password-error', 'The new passwords do not match.')
+        return
+    }
+
+    byId('password-submit').disabled = true
+
+    try {
+        await postData('/api/auth/password', {currentPassword: currentPassword, newPassword: newPassword})
+    } catch (error) {
+        byId('password-submit').disabled = false
+        showFormMessage('password-error', describeFormError(error))
+        return
+    }
+
+    byId('password-form').reset()
+    byId('password-submit').disabled = false
+    byId('password-success').hidden = false
+    loadSecurity()
+})
+
+byId('two-step-start-form').addEventListener('submit', async (event) => {
+    event.preventDefault()
+    byId('two-step-error').hidden = true
+    byId('two-step-success').hidden = true
+
+    const currentPassword = byId('two-step-password').value
+
+    try {
+        if (security.twoStepEnabled) {
+            await postData('/api/auth/two-step/disable', {currentPassword: currentPassword})
+            security.twoStepEnabled = false
+            renderTwoStep()
+            showFormMessage('two-step-success', 'Two-step sign-in is off.')
+        } else {
+            const setup = await postData('/api/auth/two-step/setup', {currentPassword: currentPassword})
+            setText('two-step-secret', formatSecret(setup.secret))
+            byId('two-step-link').href = setup.uri
+            byId('two-step-start-form').hidden = true
+            byId('two-step-confirm-form').hidden = false
+            byId('two-step-code').focus()
+        }
+    } catch (error) {
+        showFormMessage('two-step-error', describeFormError(error))
+    }
+
+    loadEvents()
+})
+
+byId('two-step-confirm-form').addEventListener('submit', async (event) => {
+    event.preventDefault()
+    byId('two-step-error').hidden = true
+
+    try {
+        await postData('/api/auth/two-step/enable', {code: byId('two-step-code').value.trim()})
+    } catch (error) {
+        showFormMessage('two-step-error', describeFormError(error))
+        byId('two-step-code').select()
+        loadEvents()
+        return
+    }
+
+    security.twoStepEnabled = true
+    renderTwoStep()
+    showFormMessage('two-step-success', 'Two-step sign-in is on. Keep the key somewhere safe in case you lose the phone.')
+    loadEvents()
+})
+
+async function loadEvents() {
+    try {
+        renderEvents(await fetchData('/api/auth/events'))
+    } catch (error) {
+        return
+    }
+}
 
 document.addEventListener('visibilitychange', () => {
     if (!document.hidden && !state.paused) {
