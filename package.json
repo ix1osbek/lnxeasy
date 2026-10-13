@@ -1,5 +1,5 @@
 {
-  "name": "ubuntu-cli-ui",
+  "name": "lnxeasy",
   "version": "0.1.0",
   "description": "Web panel for monitoring an Ubuntu server from the browser (Node.js core only)",
   "license": "MIT",
