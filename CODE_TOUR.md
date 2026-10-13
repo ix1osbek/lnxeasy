@@ -4,7 +4,7 @@ You are about to run lnxeasy on a server, as a service that is reachable over th
 You should not have to take anyone's word that it is safe. This document shows where everything
 is, in the order things happen, so that you can read the code yourself in about half an hour.
 
-The server side is about 2,300 lines of JavaScript with no dependencies, plus one shell script
+The server side is about 2,800 lines of JavaScript with no dependencies, plus one shell script
 that installs it. There is no build step: the files in the repository are the files that run.
 
 - [The ten-minute check](#the-ten-minute-check)
@@ -142,9 +142,10 @@ src/
     index.js            The list of modules.
     system/             Uptime, CPU, memory: reads /proc and node:os.
     ports/              Listening ports: asks the helper (or runs ss) and parses the output.
+    processes/          The process list and one process: reads /proc.
 
 public/                 The page: plain HTML, CSS and JavaScript.
-tests/                  180 tests, run with "npm test".
+tests/                  199 tests, run with "npm test".
 ```
 
 Imports go one way: `http/` and `auth/` may use `core/`, `modules/` may use `core/`,
@@ -157,7 +158,7 @@ in order. Each step is one function.
 
 | Step | Function | What it does |
 |------|----------|--------------|
-| 1 | `require_root`, `check_system`, `check_systemd` | Stops if it is not root, not Linux, or `curl`, `tar`, `sha256sum`, `openssl` or systemd is missing. |
+| 1 | `require_root`, `check_system`, `check_systemd`, `check_port_is_free` | Stops before changing anything if it is not root, not Linux, a needed tool or systemd is missing, or the port is already taken by another program. |
 | 2 | `download_node` | Downloads Node.js from `nodejs.org`, checks its SHA-256 against the list published there, unpacks it into `/opt/lnxeasy/node`. |
 | 3 | `download_app` | Downloads lnxeasy from GitHub into `/opt/lnxeasy/app`. For a release, compares a checksum of every file with the one written in the script (`hash_tree`) and installs nothing if they differ. |
 | 4 | `create_user` | Creates the `lnxeasy` system user: no password, no shell, no home directory. |
@@ -291,9 +292,19 @@ the only other way to change the password is the `lnxeasy passwd` command on the
 | Load average | reads `/proc/loadavg` | same |
 | Memory and swap | reads `/proc/meminfo` | same |
 | Listening ports and processes | output of `ss -tulpnH`, from the helper or run directly | [`src/modules/ports/ports.source.js`](src/modules/ports/ports.source.js) |
+| Process list: name, state, CPU time, threads | reads `/proc/<pid>/stat` | [`src/modules/processes/processes.service.js`](src/modules/processes/processes.service.js) |
+| Process owner and memory | reads `/proc/<pid>/status` | same |
+| Process command line | reads `/proc/<pid>/cmdline` | same |
+| CPU use per core | reads `/proc/stat` | same |
+| User names for the owners | reads `/etc/passwd` | same |
+| Program file of a process | reads the link `/proc/<pid>/exe` | same |
 
 That is the complete list. Nothing else on the server is read: no files in `/home`, no logs,
-no other configuration. The two `*.parser.js` files only turn text into objects.
+no other configuration. The `*.parser.js` files only turn text into objects.
+
+The process pages show what any user on the server can already see with `ps` and `top`. Two things
+are left out on purpose: the environment of a process (`/proc/<pid>/environ`), because it often holds
+passwords and keys, and its open files. `/etc/passwd` holds user names, not passwords.
 
 lnxeasy is read-only today. No endpoint stops, starts or changes anything on the server.
 
@@ -323,6 +334,8 @@ read-only for it, except for `/var/lib/lnxeasy`.
 | `POST /api/auth/two-step/disable` | yes, and the current password | same |
 | `GET /api/system` | yes | [`src/modules/system/system.routes.js`](src/modules/system/system.routes.js) |
 | `GET /api/ports` | yes | [`src/modules/ports/ports.routes.js`](src/modules/ports/ports.routes.js) |
+| `GET /api/processes` | yes | [`src/modules/processes/processes.routes.js`](src/modules/processes/processes.routes.js) |
+| `GET /api/process?pid=N` | yes | same |
 | files in `public/` | yes, except the login page and its assets | [`src/http/static.js`](src/http/static.js) |
 
 To confirm that the list is complete:
@@ -331,7 +344,7 @@ To confirm that the list is complete:
 grep -rnE "router\.(get|post)\(" server.js src
 ```
 
-It prints eleven lines, the eleven endpoints above.
+It prints thirteen lines, the thirteen endpoints above.
 
 ## 8. The page in the browser
 
@@ -340,6 +353,7 @@ It prints eleven lines, the eleven endpoints above.
 | [`public/login.html`](public/login.html), [`public/login.js`](public/login.js) | The sign-in form. Sends the form to `/api/auth/login` and nothing else. |
 | [`public/index.html`](public/index.html) | The dashboard markup. |
 | [`public/app.js`](public/app.js) | Fetches `/api/system` and `/api/ports` every five seconds and draws them. |
+| [`public/processes.js`](public/processes.js) | The Processes section and the window with the details of one process. |
 | [`public/styles.css`](public/styles.css) | The look. |
 
 The page loads no fonts, scripts, images or styles from other servers, and the Content Security

@@ -39,6 +39,9 @@ function createFakeDependencies() {
         run: createFakeRun(),
         readSocket: async () => '',
         helperSocket: null,
+        fs: {},
+        now: () => 0,
+        sleep: async () => {},
     }
 }
 

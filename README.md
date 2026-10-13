@@ -9,22 +9,17 @@ A small web panel for watching an Ubuntu server from the browser instead of the 
 It runs on the server as a single Node.js process that serves both the web page and a JSON API.
 No external dependencies: only Node.js core modules on the server, plain HTML, CSS and JavaScript in the browser.
 
-> Early stage. The system overview and listening ports are available so far. Disks, processes,
+> Early stage. The system overview, listening ports and processes are available so far. Disks,
 > services and server management are planned.
 
 ## Install on a server
 
-Logged in as root:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/lnxeasy/lnxeasy/main/install.sh | bash
-```
-
-Logged in as a regular user with sudo rights:
-
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lnxeasy/lnxeasy/main/install.sh | sudo bash
 ```
+
+If the server answers `sudo: command not found`, you are already root: leave `sudo` out.
+You can run the command from any directory.
 
 Root is needed once, to install: the script creates a system user, writes to `/opt`, `/etc` and
 `/var/lib`, and registers a systemd service. After that lnxeasy itself runs as the unprivileged
@@ -46,8 +41,9 @@ lnxeasy is running.
 Open the address in the browser and sign in. The browser warns about the certificate once,
 because the installer creates a self-signed one.
 
-If the page keeps loading and never opens, a firewall is blocking TCP port 4321. Allow it on the server
-(`ufw allow 4321/tcp`) and in the firewall of your hosting provider's panel, if it has one.
+If the page keeps loading and never opens, a firewall is blocking TCP port 4321. The installer tells you
+when `ufw` or `firewalld` on the server is the cause and prints the command to allow the port.
+A firewall in your hosting provider's panel cannot be seen from the server: check it there.
 
 The commands below need root. If you are not root, put `sudo` in front of them.
 
@@ -72,6 +68,7 @@ curl -fsSL https://raw.githubusercontent.com/lnxeasy/lnxeasy/main/install.sh | b
 
 | Option | Effect |
 |--------|--------|
+| `--port NUMBER` | Use this port instead of 4321. The installer stops before changing anything when the port is taken. |
 | `--allow-ip ADDRESS` | Only this address or range can reach the panel. May be repeated. |
 | `--cert FILE --key FILE` | Use your own HTTPS certificate, for example one from Let's Encrypt, instead of a self-signed one. |
 | `--behind-proxy` | Listen on this machine only, for a web server that adds HTTPS and a domain. See below. |
@@ -172,6 +169,8 @@ Open `http://127.0.0.1:4321` and sign in as `admin`. Change `HOST` and `PORT` in
 | `GET /api/health` | Returns `{"data":{"status":"ok"}}` |
 | `GET /api/system` | Hostname, IP address, kernel, uptime, CPU, load average, memory and swap |
 | `GET /api/ports` | Listening TCP and UDP ports and the processes that hold them |
+| `GET /api/processes` | Every process with its CPU, memory, owner and command, plus CPU use per core |
+| `GET /api/process?pid=N` | One process with its parent, children and listening ports |
 | `POST /api/auth/login` | Signs in with `{"username", "password", "code"}` and sets the session cookie |
 | `POST /api/auth/logout` | Signs out |
 | `POST /api/auth/password` | Changes the password with `{"currentPassword", "newPassword"}` |
