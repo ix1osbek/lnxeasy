@@ -4,7 +4,9 @@ import {AppError} from '../core/errors.js'
 export function sendJson(res, statusCode, data) {
     const body = JSON.stringify({data: data})
     res.writeHead(statusCode, {
-        'Content-Type': 'application/json; charset=utf-8'
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff'
     })
     res.end(body)
 }
@@ -35,7 +37,9 @@ export function sendError(res, error) {
     })
 
     res.writeHead(statusCode, {
-        'Content-Type': 'application/json; charset=utf-8'
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff'
     })
 
     res.end(body)

@@ -38,6 +38,8 @@
             <span id="status-text">Connecting</span>
         </span>
         <button class="button" id="toggle-refresh" type="button">Pause</button>
+        <button class="button" id="open-password" type="button">Password</button>
+        <button class="button" id="sign-out" type="button">Sign out</button>
     </div>
 </header>
 
@@ -174,6 +176,36 @@
     <span>lnxeasy — Linux made easy</span>
     <span>Read-only view · refreshes every 5 seconds</span>
 </footer>
+
+<dialog class="dialog" id="password-dialog">
+    <form class="dialog-form" id="password-form">
+        <h2 class="dialog-title">Change password</h2>
+
+        <label class="field">
+            <span class="field-label">Current password</span>
+            <input class="input" id="current-password" type="password" autocomplete="current-password" required>
+        </label>
+
+        <label class="field">
+            <span class="field-label">New password</span>
+            <input class="input" id="new-password" type="password" autocomplete="new-password" minlength="10" required>
+            <span class="field-hint">At least 10 characters.</span>
+        </label>
+
+        <label class="field">
+            <span class="field-label">Repeat the new password</span>
+            <input class="input" id="repeat-password" type="password" autocomplete="new-password" minlength="10" required>
+        </label>
+
+        <p class="form-error" id="password-error" role="alert" hidden></p>
+        <p class="form-success" id="password-success" hidden>The password was changed. Other devices were signed out.</p>
+
+        <div class="dialog-actions">
+            <button class="button" id="password-cancel" type="button">Close</button>
+            <button class="button button-primary" id="password-submit" type="submit">Change password</button>
+        </div>
+    </form>
+</dialog>
 
 <script src="/app.js"></script>
 </body>

@@ -8,6 +8,7 @@
   "scripts": {
     "start": "node --env-file-if-exists=.env server.js",
     "dev": "node --watch --env-file-if-exists=.env server.js",
+    "passwd": "node --env-file-if-exists=.env cli.js passwd",
     "test": "node --test \"tests/*.test.js\""
   },
   "engines": {

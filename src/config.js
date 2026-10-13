@@ -1,6 +1,7 @@
 const DEFAULT_HOST = '127.0.0.1'
 const DEFAULT_PORT = 4321
 const MAX_PORT = 65535
+const DEFAULT_AUTH_FILE = 'data/auth.json'
 
 
 function readHost(value) {
@@ -24,9 +25,42 @@ function readPort(value) {
     return port
 }
 
+function readText(value, fallback) {
+    if (value === undefined || value === '') {
+        return fallback
+    }
+
+    return value
+}
+
+function readTls(env) {
+    const certFile = readText(env.TLS_CERT_FILE, null)
+    const keyFile = readText(env.TLS_KEY_FILE, null)
+
+    if (certFile === null && keyFile === null) {
+        return null
+    }
+
+    if (certFile === null || keyFile === null) {
+        throw new Error('TLS_CERT_FILE and TLS_KEY_FILE must be set together.')
+    }
+
+    return {
+        certFile: certFile,
+        keyFile: keyFile
+    }
+}
+
+export function isLoopbackHost(host) {
+    return host === 'localhost' || host === '::1' || host.startsWith('127.')
+}
+
 export function loadConfig(env) {
-    return Object.freeze({
+    return {
         host: readHost(env.HOST),
-        port: readPort(env.PORT)
-    })
+        port: readPort(env.PORT),
+        authFile: readText(env.AUTH_FILE, DEFAULT_AUTH_FILE),
+        tls: readTls(env),
+        allowInsecureHttp: env.ALLOW_INSECURE_HTTP === 'yes'
+    }
 }

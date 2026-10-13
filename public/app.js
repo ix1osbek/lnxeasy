@@ -60,6 +60,38 @@ async function fetchData(path) {
     }
 
     if (body.error) {
+        if (body.error.code === 'UNAUTHORIZED') {
+            window.location.replace('/login')
+        }
+        throw createApiError(body.error.code, body.error.message)
+    }
+
+    return body.data
+}
+
+async function postData(path, data) {
+    let response = null
+    try {
+        response = await fetch(path, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        })
+    } catch (e) {
+        throw createApiError('OFFLINE', 'The server does not answer.')
+    }
+
+    let body = null
+    try {
+        body = await response.json()
+    } catch (e) {
+        throw createApiError('BAD_RESPONSE', 'The server sent an answer that is not JSON.')
+    }
+
+    if (body.error) {
+        if (body.error.code === 'UNAUTHORIZED') {
+            window.location.replace('/login')
+        }
         throw createApiError(body.error.code, body.error.message)
     }
 
@@ -678,6 +710,69 @@ byId('toggle-refresh').addEventListener('click', () => {
         setText('toggle-refresh', 'Pause')
         refresh()
     }
+})
+
+byId('sign-out').addEventListener('click', async () => {
+    try {
+        await postData('/api/auth/logout', {})
+    } catch (error) {
+        window.location.replace('/login')
+        return
+    }
+    window.location.replace('/login')
+})
+
+function resetPasswordDialog() {
+    byId('password-form').reset()
+    byId('password-error').hidden = true
+    byId('password-success').hidden = true
+    byId('password-submit').disabled = false
+}
+
+function showPasswordError(text) {
+    setText('password-error', text)
+    byId('password-error').hidden = false
+}
+
+byId('open-password').addEventListener('click', () => {
+    resetPasswordDialog()
+    byId('password-dialog').showModal()
+})
+
+byId('password-cancel').addEventListener('click', () => {
+    byId('password-dialog').close()
+})
+
+byId('password-form').addEventListener('submit', async (event) => {
+    event.preventDefault()
+    byId('password-error').hidden = true
+    byId('password-success').hidden = true
+
+    const currentPassword = byId('current-password').value
+    const newPassword = byId('new-password').value
+
+    if (newPassword !== byId('repeat-password').value) {
+        showPasswordError('The new passwords do not match.')
+        return
+    }
+
+    byId('password-submit').disabled = true
+
+    try {
+        await postData('/api/auth/password', {currentPassword: currentPassword, newPassword: newPassword})
+    } catch (error) {
+        byId('password-submit').disabled = false
+        if (error.code === 'INVALID_CREDENTIALS') {
+            showPasswordError('The current password is wrong.')
+        } else {
+            showPasswordError(error.message)
+        }
+        return
+    }
+
+    byId('password-form').reset()
+    byId('password-submit').disabled = false
+    byId('password-success').hidden = false
 })
 
 document.addEventListener('visibilitychange', () => {

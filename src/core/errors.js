@@ -42,3 +42,51 @@ export class CommandTimeoutError extends AppError {
         this.timeoutMs = timeoutMs
     }
 }
+
+export class BadRequestError extends AppError {
+    constructor(message) {
+        super(400, 'BAD_REQUEST', message)
+        this.name = 'BadRequestError'
+    }
+}
+
+
+export class UnauthorizedError extends AppError {
+    constructor(message) {
+        super(401, 'UNAUTHORIZED', message)
+        this.name = 'UnauthorizedError'
+    }
+}
+
+
+export class InvalidCredentialsError extends AppError {
+    constructor() {
+        super(401, 'INVALID_CREDENTIALS', 'Wrong username or password')
+        this.name = 'InvalidCredentialsError'
+    }
+}
+
+
+export class ForbiddenError extends AppError {
+    constructor(message) {
+        super(403, 'FORBIDDEN', message)
+        this.name = 'ForbiddenError'
+    }
+}
+
+
+export class PayloadTooLargeError extends AppError {
+    constructor() {
+        super(413, 'PAYLOAD_TOO_LARGE', 'Request body is too large')
+        this.name = 'PayloadTooLargeError'
+    }
+}
+
+
+export class TooManyAttemptsError extends AppError {
+    constructor(retryAfterSeconds) {
+        super(429, 'TOO_MANY_ATTEMPTS', 'Too many failed attempts. Try again in ' + retryAfterSeconds + ' seconds.')
+        this.name = 'TooManyAttemptsError'
+        this.retryAfterSeconds = retryAfterSeconds
+    }
+}

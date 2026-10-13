@@ -189,7 +189,7 @@ button, input {
 }
 
 .button {
-    min-width: 84px;
+    min-width: 76px;
     padding: 5px 16px;
     border: 1px solid var(--border-strong);
     border-radius: 8px;
@@ -684,6 +684,183 @@ section + section {
     padding: 18px var(--gutter) 26px;
     color: var(--text-muted);
     font-size: 15px;
+}
+
+.button-primary {
+    border-color: var(--text);
+    background: var(--text);
+    color: #ffffff;
+}
+
+.button-primary:hover {
+    background: #333333;
+}
+
+.button:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.button-wide {
+    width: 100%;
+    padding: 9px 16px;
+    font-size: 18px;
+}
+
+.field {
+    display: block;
+    margin-top: 16px;
+}
+
+.field-label {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--text-muted);
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.field-hint {
+    display: block;
+    margin-top: 4px;
+    color: var(--text-muted);
+    font-size: 15px;
+    font-style: italic;
+}
+
+.input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 18px;
+}
+
+.input:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 0;
+    border-color: var(--accent);
+}
+
+.form-error {
+    margin-top: 14px;
+    padding: 8px 12px;
+    border: 1px solid var(--danger);
+    border-radius: 8px;
+    background: var(--danger-soft);
+    color: var(--danger);
+    font-size: 16px;
+}
+
+.form-success {
+    margin-top: 14px;
+    padding: 8px 12px;
+    border: 1px solid var(--ok);
+    border-radius: 8px;
+    background: var(--ok-soft);
+    color: var(--ok);
+    font-size: 16px;
+}
+
+.login-page {
+    min-height: 100vh;
+    background: var(--surface-soft);
+}
+
+.login {
+    width: 100%;
+    max-width: 420px;
+    margin: 0 auto;
+    padding: 9vh 16px 40px;
+}
+
+.login-brand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 22px;
+}
+
+.login-mark {
+    width: 52px;
+    height: 52px;
+}
+
+.login-brand .brand-name {
+    font-size: 36px;
+}
+
+.login-card {
+    padding: 26px 28px 28px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface);
+}
+
+.login-title {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 700;
+}
+
+.login-note {
+    margin-top: 4px;
+    color: var(--text-muted);
+    font-size: 16px;
+}
+
+.login-card .button-wide {
+    margin-top: 22px;
+}
+
+.login-foot {
+    margin-top: 16px;
+    color: var(--text-muted);
+    font-size: 15px;
+    text-align: center;
+}
+
+.login-foot code {
+    padding: 1px 6px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: var(--surface);
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 13px;
+}
+
+.dialog {
+    width: calc(100% - 32px);
+    max-width: 440px;
+    padding: 0;
+    border: 1px solid var(--border-strong);
+    border-radius: 14px;
+    background: var(--surface);
+    color: var(--text);
+}
+
+.dialog::backdrop {
+    background: rgba(20, 20, 20, 0.35);
+}
+
+.dialog-form {
+    padding: 24px 26px 22px;
+}
+
+.dialog-title {
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 22px;
 }
 
 @media (max-width: 1100px) {
