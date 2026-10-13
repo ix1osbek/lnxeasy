@@ -2,8 +2,8 @@
 set -euo pipefail
 
 REPOSITORY="lnxeasy/lnxeasy"
-VERSION="0.2.0"
-TREE_SHA256="c19c2613550feec81bac81aef020645f6f8ea4615233c93578d34388a4486cde"
+VERSION="0.3.0"
+TREE_SHA256="8f30556a4597880d1e52ed1928ed5210dc61fbbc39d83ac607fbb8d50dc8f80a"
 REF="${LNXEASY_REF:-}"
 NODE_LINE="latest-v22.x"
 
@@ -16,6 +16,9 @@ TLS_CERT_FILE="$TLS_DIR/cert.pem"
 TLS_KEY_FILE="$TLS_DIR/key.pem"
 AUTH_FILE="$STATE_DIR/auth.json"
 UNIT_FILE="/etc/systemd/system/lnxeasy.service"
+HELPER_SOCKET_UNIT="/etc/systemd/system/lnxeasy-helper.socket"
+HELPER_SERVICE_UNIT="/etc/systemd/system/lnxeasy-helper@.service"
+HELPER_SOCKET="/run/lnxeasy/helper.sock"
 COMMAND_FILE="/usr/local/bin/lnxeasy"
 SERVICE_USER="lnxeasy"
 DEFAULT_PORT="4321"
@@ -27,6 +30,7 @@ ALLOWED_ADDRESSES=""
 CUSTOM_CERT_FILE=""
 CUSTOM_KEY_FILE=""
 ACTION="install"
+MODE=""
 
 say() {
     printf '%s\n' "$*"
@@ -219,11 +223,29 @@ write_config() {
     ensure_config_value TLS_CERT_FILE "$TLS_CERT_FILE"
     ensure_config_value TLS_KEY_FILE "$TLS_KEY_FILE"
 
+    if [ "$MODE" = "proxy" ]; then
+        set_config_value HOST "127.0.0.1"
+        set_config_value TLS_CERT_FILE ""
+        set_config_value TLS_KEY_FILE ""
+        set_config_value TRUSTED_PROXIES "127.0.0.1"
+    fi
+
+    if [ "$MODE" = "direct" ]; then
+        set_config_value HOST "0.0.0.0"
+        set_config_value TLS_CERT_FILE "$TLS_CERT_FILE"
+        set_config_value TLS_KEY_FILE "$TLS_KEY_FILE"
+        set_config_value TRUSTED_PROXIES ""
+    fi
+
     if [ -n "$ALLOWED_ADDRESSES" ]; then
         set_config_value ALLOWED_IPS "$ALLOWED_ADDRESSES"
     fi
 
     chmod 644 "$CONFIG_FILE"
+}
+
+is_behind_proxy() {
+    grep -q "^TLS_CERT_FILE=$" "$CONFIG_FILE" 2>/dev/null
 }
 
 read_config_value() {
@@ -275,6 +297,10 @@ use_custom_certificate() {
 
 create_certificate() {
     local cert_file key_file
+
+    if is_behind_proxy; then
+        return
+    fi
 
     if [ -n "$CUSTOM_CERT_FILE" ]; then
         use_custom_certificate
@@ -335,6 +361,99 @@ create_account() {
     fi
 }
 
+write_helper_units() {
+    local ss_path
+
+    ss_path="$(command -v ss 2>/dev/null || true)"
+    if [ -z "$ss_path" ]; then
+        say "The \"ss\" command was not found, so ports will be listed without process names."
+        say "Install the iproute2 package and run this installer again."
+        return
+    fi
+
+    cat > "$HELPER_SOCKET_UNIT" <<UNIT
+[Unit]
+Description=lnxeasy helper socket
+Documentation=https://github.com/$REPOSITORY
+
+[Socket]
+ListenStream=$HELPER_SOCKET
+SocketUser=root
+SocketGroup=$SERVICE_USER
+SocketMode=0660
+DirectoryMode=0755
+Accept=yes
+MaxConnections=16
+
+[Install]
+WantedBy=sockets.target
+UNIT
+
+    cat > "$HELPER_SERVICE_UNIT" <<UNIT
+[Unit]
+Description=lnxeasy helper (lists listening ports with process names)
+Documentation=https://github.com/$REPOSITORY
+CollectMode=inactive-or-failed
+
+[Service]
+ExecStart=$ss_path -tulpnH
+StandardInput=null
+StandardOutput=socket
+StandardError=null
+LogLevelMax=notice
+RuntimeMaxSec=10
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+CapabilityBoundingSet=CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
+UNIT
+
+    ensure_config_value HELPER_SOCKET "$HELPER_SOCKET"
+}
+
+start_helper() {
+    if [ ! -f "$HELPER_SOCKET_UNIT" ]; then
+        return
+    fi
+
+    systemctl daemon-reload
+    systemctl enable lnxeasy-helper.socket >/dev/null 2>&1
+    systemctl restart lnxeasy-helper.socket
+}
+
+count_helper_lines() {
+    "$INSTALL_DIR/node/bin/node" -e '
+        const net = require("node:net")
+        const chunks = []
+        const socket = net.createConnection({path: process.argv[1]})
+        socket.setTimeout(5000, () => { socket.destroy(); console.log("0 0") })
+        socket.on("data", (chunk) => chunks.push(chunk))
+        socket.on("error", () => console.log("0 0"))
+        socket.on("end", () => {
+            const lines = Buffer.concat(chunks).toString().split("\n").filter((line) => line.trim() !== "")
+            console.log(lines.filter((line) => line.includes("users:")).length + " " + lines.length)
+        })
+    ' "$1" 2>/dev/null || true
+}
+
+check_helper() {
+    local counts
+
+    if [ ! -S "$HELPER_SOCKET" ]; then
+        return 0
+    fi
+
+    counts="$(count_helper_lines "$HELPER_SOCKET")"
+
+    say ""
+    case "$counts" in
+        "0 0" | "") say "The helper that reads process names did not answer. Ports will be listed without process names." ;;
+        "0 "*) say "The helper answered, but it could not see any process names. Please report this at https://github.com/$REPOSITORY/issues" ;;
+        *) say "Process names are visible for ${counts%% *} of ${counts##* } listening sockets." ;;
+    esac
+}
+
 write_unit() {
     cat > "$UNIT_FILE" <<EOF
 [Unit]
@@ -370,16 +489,73 @@ start_service() {
 }
 
 wait_until_ready() {
-    local port="$1" attempt
+    local port="$1" scheme="https" attempt
+
+    if is_behind_proxy; then
+        scheme="http"
+    fi
 
     for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
-        if curl -fsSk -o /dev/null "https://127.0.0.1:$port/api/health" 2>/dev/null; then
+        if curl -fsSk -o /dev/null "$scheme://127.0.0.1:$port/api/health" 2>/dev/null; then
             return 0
         fi
         sleep 1
     done
 
     return 1
+}
+
+print_account() {
+    local as_root="$1"
+
+    if [ -n "$NEW_PASSWORD" ]; then
+        say "    Username:  $NEW_USERNAME"
+        say "    Password:  $NEW_PASSWORD"
+        say ""
+        say "Write the password down now. It is not stored anywhere and will not be shown again."
+        say "You can change it in the browser, or with: ${as_root}lnxeasy passwd"
+    else
+        say ""
+        say "The admin account was kept. Forgot the password? Run: ${as_root}lnxeasy passwd"
+    fi
+}
+
+print_footer() {
+    say ""
+    say "Status:     systemctl status lnxeasy"
+    say "Log:        journalctl -u lnxeasy -f"
+    say "Settings:   $CONFIG_FILE (then: systemctl restart lnxeasy)"
+    say "Update:     run this installer again"
+    say "Uninstall:  run this installer with --uninstall"
+}
+
+print_proxy_summary() {
+    local port="$1" as_root="$2"
+
+    say ""
+    say "lnxeasy is running behind your web server."
+    say ""
+    say "    Listens on:  http://127.0.0.1:$port  (this machine only)"
+    print_account "$as_root"
+    say ""
+    say "Now point a domain at it in your web server. It must add HTTPS and pass the visitor's address on."
+    say ""
+    say "nginx, inside a server block that already has a certificate for the domain:"
+    say ""
+    say "    location / {"
+    say "        proxy_pass http://127.0.0.1:$port;"
+    say "        proxy_set_header Host \$host;"
+    say "        proxy_set_header X-Forwarded-For \$remote_addr;"
+    say "    }"
+    say ""
+    say "Caddy, the whole site (it gets the certificate by itself):"
+    say ""
+    say "    panel.example.com {"
+    say "        reverse_proxy 127.0.0.1:$port"
+    say "    }"
+    say ""
+    say "Then open https://your-domain in the browser: no port, no certificate warning."
+    say "To go back to the address with a port, run this installer with --direct."
 }
 
 detect_client_address() {
@@ -448,6 +624,14 @@ print_summary() {
         exit 1
     fi
 
+    check_helper
+
+    if is_behind_proxy; then
+        print_proxy_summary "$port" "$as_root"
+        print_footer
+        return
+    fi
+
     fingerprint="$(openssl x509 -in "$(read_config_value TLS_CERT_FILE "$TLS_CERT_FILE")" -noout -fingerprint -sha256 2>/dev/null | cut -d= -f2)"
 
     say ""
@@ -458,16 +642,7 @@ print_summary() {
     else
         say "    Open:      https://$address:$port"
     fi
-    if [ -n "$NEW_PASSWORD" ]; then
-        say "    Username:  $NEW_USERNAME"
-        say "    Password:  $NEW_PASSWORD"
-        say ""
-        say "Write the password down now. It is not stored anywhere and will not be shown again."
-        say "You can change it in the browser, or with: ${as_root}lnxeasy passwd"
-    else
-        say ""
-        say "The admin account was kept. Forgot the password? Run: ${as_root}lnxeasy passwd"
-    fi
+    print_account "$as_root"
 
     say ""
     if [ -n "$CUSTOM_CERT_FILE" ]; then
@@ -502,12 +677,7 @@ print_summary() {
     say "After the first sign-in, open Security in the top bar and turn on two-step sign-in."
     say "If the page keeps loading and never opens, a firewall is blocking TCP port $port:"
     say "check the firewall of the server and the one in your hosting provider's panel."
-    say ""
-    say "Status:     systemctl status lnxeasy"
-    say "Log:        journalctl -u lnxeasy -f"
-    say "Settings:   $CONFIG_FILE (then: systemctl restart lnxeasy)"
-    say "Update:     run this installer again"
-    say "Uninstall:  run this installer with --uninstall"
+    print_footer
 }
 
 install_lnxeasy() {
@@ -524,7 +694,9 @@ install_lnxeasy() {
     create_certificate
     write_command
     create_account
+    write_helper_units
     write_unit
+    start_helper
     start_service
     print_summary
 }
@@ -534,9 +706,10 @@ uninstall_lnxeasy() {
 
     if command -v systemctl >/dev/null 2>&1; then
         systemctl disable --now lnxeasy.service >/dev/null 2>&1 || true
+        systemctl disable --now lnxeasy-helper.socket >/dev/null 2>&1 || true
     fi
 
-    rm -f "$UNIT_FILE" "$COMMAND_FILE"
+    rm -f "$UNIT_FILE" "$COMMAND_FILE" "$HELPER_SOCKET_UNIT" "$HELPER_SERVICE_UNIT"
     rm -rf "$INSTALL_DIR" "$CONFIG_DIR" "$STATE_DIR"
 
     if command -v systemctl >/dev/null 2>&1; then
@@ -556,6 +729,8 @@ print_usage() {
     say "  (no options)             Install lnxeasy, or update it and keep the settings"
     say "  --allow-ip ADDRESS       Let only this address or range reach the panel (may be repeated)"
     say "  --cert FILE --key FILE   Use your own HTTPS certificate instead of a self-signed one"
+    say "  --behind-proxy           Listen on this machine only, for a web server that adds HTTPS and a domain"
+    say "  --direct                 Go back to serving HTTPS directly on the port"
     say "  --uninstall              Remove lnxeasy and everything it created"
 }
 
@@ -588,6 +763,14 @@ read_options() {
                 CUSTOM_KEY_FILE="$2"
                 shift 2
                 ;;
+            --behind-proxy)
+                MODE="proxy"
+                shift
+                ;;
+            --direct)
+                MODE="direct"
+                shift
+                ;;
             --help | -h)
                 print_usage
                 exit 0
@@ -602,6 +785,10 @@ read_options() {
         [ -n "$CUSTOM_CERT_FILE" ] && [ -n "$CUSTOM_KEY_FILE" ] || fail "--cert and --key must be used together."
         [ -f "$CUSTOM_CERT_FILE" ] || fail "Certificate file not found: $CUSTOM_CERT_FILE"
         [ -f "$CUSTOM_KEY_FILE" ] || fail "Key file not found: $CUSTOM_KEY_FILE"
+    fi
+
+    if [ "$MODE" = "proxy" ] && [ -n "$CUSTOM_CERT_FILE" ]; then
+        fail "--behind-proxy and --cert cannot be used together: behind a proxy the web server holds the certificate."
     fi
 }
 

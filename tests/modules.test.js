@@ -37,6 +37,8 @@ function createFakeDependencies() {
         os: createFakeOs(),
         readFile: createFakeReadFile(),
         run: createFakeRun(),
+        readSocket: async () => '',
+        helperSocket: null,
     }
 }
 

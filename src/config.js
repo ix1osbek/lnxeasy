@@ -53,7 +53,7 @@ function readTls(env) {
     }
 }
 
-function readAllowedAddresses(value) {
+function readAddressList(name, value) {
     const text = readText(value, '')
     const entries = []
 
@@ -66,7 +66,7 @@ function readAllowedAddresses(value) {
         try {
             checkAddressEntry(entry)
         } catch (e) {
-            throw new Error('Invalid ALLOWED_IPS. ' + e.message)
+            throw new Error('Invalid ' + name + '. ' + e.message)
         }
 
         entries.push(entry)
@@ -85,7 +85,9 @@ export function loadConfig(env) {
         port: readPort(env.PORT),
         authFile: readText(env.AUTH_FILE, DEFAULT_AUTH_FILE),
         tls: readTls(env),
-        allowedAddresses: readAllowedAddresses(env.ALLOWED_IPS),
+        allowedAddresses: readAddressList('ALLOWED_IPS', env.ALLOWED_IPS),
+        trustedProxies: readAddressList('TRUSTED_PROXIES', env.TRUSTED_PROXIES),
+        helperSocket: readText(env.HELPER_SOCKET, null),
         allowInsecureHttp: env.ALLOW_INSECURE_HTTP === 'yes'
     }
 }

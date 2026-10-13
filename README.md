@@ -74,6 +74,8 @@ curl -fsSL https://raw.githubusercontent.com/lnxeasy/lnxeasy/main/install.sh | b
 |--------|--------|
 | `--allow-ip ADDRESS` | Only this address or range can reach the panel. May be repeated. |
 | `--cert FILE --key FILE` | Use your own HTTPS certificate, for example one from Let's Encrypt, instead of a self-signed one. |
+| `--behind-proxy` | Listen on this machine only, for a web server that adds HTTPS and a domain. See below. |
+| `--direct` | Go back from `--behind-proxy` to serving HTTPS directly on the port. |
 | `--uninstall` | Remove lnxeasy and everything it created. |
 
 Prefer to read a script before running it as root? Download it first:
@@ -83,6 +85,55 @@ curl -fsSLO https://raw.githubusercontent.com/lnxeasy/lnxeasy/main/install.sh
 less install.sh
 bash install.sh
 ```
+
+### A domain instead of a port
+
+`https://203.0.113.10:4321` works, but `https://panel.example.com` is nicer: no port and no certificate
+warning. For that, a web server that already serves HTTPS on the machine (nginx, Caddy) passes the
+requests on to lnxeasy.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lnxeasy/lnxeasy/main/install.sh | bash -s -- --behind-proxy
+```
+
+lnxeasy then listens on `http://127.0.0.1:4321` only, and the installer prints the lines to add to
+your web server. For nginx, inside a server block that has a certificate for the domain:
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:4321;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $remote_addr;
+}
+```
+
+For Caddy, which gets the certificate by itself:
+
+```
+panel.example.com {
+    reverse_proxy 127.0.0.1:4321
+}
+```
+
+Both headers matter. `Host` is how lnxeasy tells its own pages from other sites, and
+`X-Forwarded-For` is the visitor's address, used for the lockout, the address list and the activity log.
+lnxeasy believes that header only from the addresses in `TRUSTED_PROXIES` (the installer sets `127.0.0.1`).
+
+If the web server runs in a container, it reaches the host through another address. Set these in
+`/etc/lnxeasy/lnxeasy.env` by hand, with the addresses of your container network:
+
+```
+HOST=172.17.0.1
+ALLOW_INSECURE_HTTP=yes
+TRUSTED_PROXIES=172.16.0.0/12
+```
+
+### Process names
+
+The service itself runs without privileges, so on its own it could only see its own processes.
+The installer therefore adds a small helper: a separate systemd unit that runs one fixed command
+as root, `ss -tulpnH`, and hands the output to lnxeasy over a local socket. It accepts no input.
+[CODE_TOUR.md](CODE_TOUR.md) shows both unit files.
 
 ### Security
 

@@ -37,6 +37,14 @@ function createOpenGuard() {
     }
 }
 
+// A client policy that lets every address in.
+function createOpenPolicy() {
+    return {
+        identify: () => '203.0.113.5',
+        allows: () => true,
+    }
+}
+
 // A request limiter that never says no.
 function createOpenLimiter() {
     return { check: () => {} }
@@ -61,7 +69,7 @@ test('handle calls the matching handler', async () => {
     router.get('/api/hello', (req, res) => {
         sendJson(res, 200, { message: 'hi' })
     })
-    const app = new App(router, null, createOpenGuard(), createOpenLimiter())
+    const app = new App(router, null, createOpenGuard(), createOpenLimiter(), createOpenPolicy())
     const res = createFakeResponse()
 
     await app.handle(createFakeRequest('GET', '/api/hello'), res)
@@ -75,7 +83,7 @@ test('handle ignores the query string when matching', async () => {
     router.get('/api/hello', (req, res) => {
         sendJson(res, 200, { message: 'hi' })
     })
-    const app = new App(router, null, createOpenGuard(), createOpenLimiter())
+    const app = new App(router, null, createOpenGuard(), createOpenLimiter(), createOpenPolicy())
     const res = createFakeResponse()
 
     await app.handle(createFakeRequest('GET', '/api/hello?page=2'), res)
@@ -92,7 +100,7 @@ test('handle passes the request and response to the handler', async () => {
         receivedRes = res
         sendJson(res, 200, {})
     })
-    const app = new App(router, null, createOpenGuard(), createOpenLimiter())
+    const app = new App(router, null, createOpenGuard(), createOpenLimiter(), createOpenPolicy())
     const req = createFakeRequest('GET', '/api/hello')
     const res = createFakeResponse()
 
@@ -108,7 +116,7 @@ test('handle waits for an async handler', async () => {
         await new Promise((resolve) => setTimeout(resolve, 5))
         sendJson(res, 200, { slow: true })
     })
-    const app = new App(router, null, createOpenGuard(), createOpenLimiter())
+    const app = new App(router, null, createOpenGuard(), createOpenLimiter(), createOpenPolicy())
     const res = createFakeResponse()
 
     await app.handle(createFakeRequest('GET', '/api/slow'), res)
@@ -118,7 +126,7 @@ test('handle waits for an async handler', async () => {
 })
 
 test('handle answers 404 for an unknown route', async () => {
-    const app = new App(new Router(), null, createOpenGuard(), createOpenLimiter())
+    const app = new App(new Router(), null, createOpenGuard(), createOpenLimiter(), createOpenPolicy())
     const res = createFakeResponse()
 
     await app.handle(createFakeRequest('GET', '/api/unknown'), res)
@@ -134,7 +142,7 @@ test('handle turns an AppError from a handler into its own response', async () =
     router.get('/api/bad', () => {
         throw new AppError(400, 'BAD_REQUEST', 'Bad input')
     })
-    const app = new App(router, null, createOpenGuard(), createOpenLimiter())
+    const app = new App(router, null, createOpenGuard(), createOpenLimiter(), createOpenPolicy())
     const res = createFakeResponse()
 
     await app.handle(createFakeRequest('GET', '/api/bad'), res)
@@ -153,7 +161,7 @@ test('handle answers 500 and logs an unexpected error', async (t) => {
     router.get('/api/bug', () => {
         throw new TypeError('secret internal detail')
     })
-    const app = new App(router, null, createOpenGuard(), createOpenLimiter())
+    const app = new App(router, null, createOpenGuard(), createOpenLimiter(), createOpenPolicy())
     const res = createFakeResponse()
 
     await app.handle(createFakeRequest('GET', '/api/bug'), res)
@@ -172,7 +180,7 @@ test('handle catches an error thrown inside an async handler', async (t) => {
         await null
         throw new Error('boom')
     })
-    const app = new App(router, null, createOpenGuard(), createOpenLimiter())
+    const app = new App(router, null, createOpenGuard(), createOpenLimiter(), createOpenPolicy())
     const res = createFakeResponse()
 
     await app.handle(createFakeRequest('GET', '/api/bug'), res)
@@ -182,7 +190,7 @@ test('handle catches an error thrown inside an async handler', async (t) => {
 
 test('handle does not log a 404', async (t) => {
     const errorLog = t.mock.method(console, 'error', () => {})
-    const app = new App(new Router(), null, createOpenGuard(), createOpenLimiter())
+    const app = new App(new Router(), null, createOpenGuard(), createOpenLimiter(), createOpenPolicy())
     const res = createFakeResponse()
 
     await app.handle(createFakeRequest('GET', '/api/unknown'), res)
@@ -205,7 +213,7 @@ function createFakeStaticFiles() {
 
 test('handle serves a file for a path outside /api/', async () => {
     const staticFiles = createFakeStaticFiles()
-    const app = new App(new Router(), staticFiles, createOpenGuard(), createOpenLimiter())
+    const app = new App(new Router(), staticFiles, createOpenGuard(), createOpenLimiter(), createOpenPolicy())
     const res = createFakeResponse()
 
     await app.handle(createFakeRequest('GET', '/styles.css?v=2'), res)
@@ -217,7 +225,7 @@ test('handle serves a file for a path outside /api/', async () => {
 
 test('handle does not ask for a file when the path is under /api/', async () => {
     const staticFiles = createFakeStaticFiles()
-    const app = new App(new Router(), staticFiles, createOpenGuard(), createOpenLimiter())
+    const app = new App(new Router(), staticFiles, createOpenGuard(), createOpenLimiter(), createOpenPolicy())
     const res = createFakeResponse()
 
     await app.handle(createFakeRequest('GET', '/api/unknown'), res)
@@ -232,7 +240,7 @@ test('handle turns a missing file into a 404 response', async () => {
             throw new AppError(404, 'NOT_FOUND', 'File not found: ' + path)
         },
     }
-    const app = new App(new Router(), staticFiles, createOpenGuard(), createOpenLimiter())
+    const app = new App(new Router(), staticFiles, createOpenGuard(), createOpenLimiter(), createOpenPolicy())
     const res = createFakeResponse()
 
     await app.handle(createFakeRequest('GET', '/nope.html'), res)
@@ -250,7 +258,7 @@ test('handle answers 401 for a protected endpoint without a session', async () =
         called = true
         sendJson(res, 200, {})
     })
-    const app = new App(router, createFakeStaticFiles(), createGuard([], false), createOpenLimiter())
+    const app = new App(router, createFakeStaticFiles(), createGuard([], false), createOpenLimiter(), createOpenPolicy())
     const res = createFakeResponse()
 
     await app.handle(createFakeRequest('GET', '/api/secret'), res)
@@ -263,7 +271,7 @@ test('handle answers 401 for a protected endpoint without a session', async () =
 })
 
 test('handle does not reveal whether a protected endpoint exists', async () => {
-    const app = new App(new Router(), createFakeStaticFiles(), createGuard([], false), createOpenLimiter())
+    const app = new App(new Router(), createFakeStaticFiles(), createGuard([], false), createOpenLimiter(), createOpenPolicy())
     const res = createFakeResponse()
 
     await app.handle(createFakeRequest('GET', '/api/unknown'), res)
@@ -276,7 +284,7 @@ test('handle serves a public endpoint without a session', async () => {
     router.get('/api/health', (req, res) => {
         sendJson(res, 200, { status: 'ok' })
     })
-    const app = new App(router, createFakeStaticFiles(), createGuard(['/api/health'], false), createOpenLimiter())
+    const app = new App(router, createFakeStaticFiles(), createGuard(['/api/health'], false), createOpenLimiter(), createOpenPolicy())
     const res = createFakeResponse()
 
     await app.handle(createFakeRequest('GET', '/api/health'), res)
@@ -289,7 +297,7 @@ test('handle serves a protected endpoint with a session', async () => {
     router.get('/api/secret', (req, res) => {
         sendJson(res, 200, { secret: 1 })
     })
-    const app = new App(router, createFakeStaticFiles(), createGuard([], true), createOpenLimiter())
+    const app = new App(router, createFakeStaticFiles(), createGuard([], true), createOpenLimiter(), createOpenPolicy())
     const res = createFakeResponse()
 
     await app.handle(createFakeRequest('GET', '/api/secret'), res)
@@ -299,7 +307,7 @@ test('handle serves a protected endpoint with a session', async () => {
 
 test('handle redirects a protected page to the login page without a session', async () => {
     const staticFiles = createFakeStaticFiles()
-    const app = new App(new Router(), staticFiles, createGuard(['/login'], false), createOpenLimiter())
+    const app = new App(new Router(), staticFiles, createGuard(['/login'], false), createOpenLimiter(), createOpenPolicy())
     const res = createFakeResponse()
 
     await app.handle(createFakeRequest('GET', '/'), res)
@@ -311,7 +319,7 @@ test('handle redirects a protected page to the login page without a session', as
 
 test('handle serves the login page file for /login', async () => {
     const staticFiles = createFakeStaticFiles()
-    const app = new App(new Router(), staticFiles, createGuard(['/login'], false), createOpenLimiter())
+    const app = new App(new Router(), staticFiles, createGuard(['/login'], false), createOpenLimiter(), createOpenPolicy())
     const res = createFakeResponse()
 
     await app.handle(createFakeRequest('GET', '/login'), res)
@@ -331,7 +339,7 @@ test('handle blocks a request the guard rejects before the handler runs', async 
     guard.checkOrigin = () => {
         throw new AppError(403, 'FORBIDDEN', 'Cross-site request blocked')
     }
-    const app = new App(router, createFakeStaticFiles(), guard, createOpenLimiter())
+    const app = new App(router, createFakeStaticFiles(), guard, createOpenLimiter(), createOpenPolicy())
     const res = createFakeResponse()
 
     await app.handle(createFakeRequest('POST', '/api/change'), res)
@@ -352,11 +360,49 @@ test('handle answers 429 when the request limiter says no, before anything else 
             throw new AppError(429, 'RATE_LIMITED', 'Too many requests')
         },
     }
-    const app = new App(router, createFakeStaticFiles(), createOpenGuard(), limiter)
+    const app = new App(router, createFakeStaticFiles(), createOpenGuard(), limiter, createOpenPolicy())
     const res = createFakeResponse()
 
     await app.handle(createFakeRequest('GET', '/api/health'), res)
 
     assert.equal(called, false)
     assert.equal(res.statusCode, 429)
+})
+
+test('handle hangs up without an answer when the client address is not allowed', async () => {
+    const router = new Router()
+    let called = false
+    router.get('/api/health', (req, res) => {
+        called = true
+        sendJson(res, 200, {})
+    })
+    const policy = {
+        identify: () => '198.51.100.9',
+        allows: () => false,
+    }
+    const app = new App(router, createFakeStaticFiles(), createOpenGuard(), createOpenLimiter(), policy)
+    const req = createFakeRequest('GET', '/api/health')
+    let destroyed = false
+    req.socket = { destroy: () => { destroyed = true } }
+    const res = createFakeResponse()
+
+    await app.handle(req, res)
+
+    assert.equal(called, false)
+    assert.equal(destroyed, true)
+    assert.equal(res.statusCode, null)
+})
+
+test('handle stores the client address the policy found on the request', async () => {
+    const router = new Router()
+    let seen = null
+    router.get('/api/health', (req, res) => {
+        seen = req.clientAddress
+        sendJson(res, 200, {})
+    })
+    const app = new App(router, createFakeStaticFiles(), createOpenGuard(), createOpenLimiter(), createOpenPolicy())
+
+    await app.handle(createFakeRequest('GET', '/api/health'), createFakeResponse())
+
+    assert.equal(seen, '203.0.113.5')
 })

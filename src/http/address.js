@@ -15,6 +15,10 @@ export function normalizeAddress(address) {
 }
 
 export function readClientAddress(req) {
+    if (typeof req.clientAddress === 'string') {
+        return req.clientAddress
+    }
+
     return normalizeAddress(req.socket.remoteAddress)
 }
 
@@ -86,5 +90,80 @@ export class AddressFilter {
         }
 
         return this.list.check(normalized, family)
+    }
+}
+
+function buildList(entries) {
+    const list = new BlockList()
+
+    for (const entry of entries) {
+        checkAddressEntry(entry)
+
+        const parts = entry.split('/')
+        const family = familyName(parts[0])
+
+        if (parts.length === 2) {
+            list.addSubnet(parts[0], Number(parts[1]), family)
+        } else {
+            list.addAddress(parts[0], family)
+        }
+    }
+
+    return list
+}
+
+export class ClientPolicy {
+    constructor(addressFilter, trustedProxies) {
+        this.addressFilter = addressFilter
+        this.hasProxies = trustedProxies.length > 0
+        this.proxies = buildList(trustedProxies)
+    }
+
+    isTrustedProxy(address) {
+        if (!this.hasProxies) {
+            return false
+        }
+
+        const normalized = normalizeAddress(address)
+        const family = familyName(normalized)
+        if (family === null) {
+            return false
+        }
+
+        return this.proxies.check(normalized, family)
+    }
+
+    allowsConnection(address) {
+        if (this.isTrustedProxy(address)) {
+            return true
+        }
+
+        return this.addressFilter.allows(address)
+    }
+
+    identify(req) {
+        const peer = normalizeAddress(req.socket.remoteAddress)
+
+        if (!this.isTrustedProxy(peer)) {
+            return peer
+        }
+
+        const header = req.headers['x-forwarded-for']
+        if (typeof header !== 'string') {
+            return peer
+        }
+
+        const parts = header.split(',')
+        const forwarded = normalizeAddress(parts[parts.length - 1].trim())
+
+        if (familyName(forwarded) === null) {
+            return peer
+        }
+
+        return forwarded
+    }
+
+    allows(address) {
+        return this.addressFilter.allows(address)
     }
 }

@@ -31,6 +31,10 @@ in the release notes, with credit to you unless you prefer to stay anonymous.
 - **No shell.** Commands are started with fixed arguments. Nothing a visitor sends is passed to a command.
 - **No dependencies.** The server uses only Node.js core modules.
 - **Unprivileged service.** lnxeasy runs as its own system user, not as root.
+- **Privilege separation.** The one thing that needs root, reading the process names behind ports,
+  is done by a separate helper that runs a single fixed command and accepts no input.
+- **Proxy headers are not trusted by default.** `X-Forwarded-For` is believed only from the addresses
+  listed in `TRUSTED_PROXIES`.
 - **Activity log.** Sign-ins, failed attempts and lockouts are written to the system log and shown in the panel.
 
 ## What it does not protect against
