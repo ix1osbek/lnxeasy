@@ -136,6 +136,13 @@ function toPercent(part, total) {
     return Math.round((part / total) * 100)
 }
 
+function countCores(cores) {
+    if (cores === 1) {
+        return '1 core'
+    }
+    return cores + ' cores'
+}
+
 function setText(id, text) {
     byId(id).textContent = text
 }
@@ -218,14 +225,14 @@ function renderSystem(info) {
     }
     renderServerAddress()
 
-    setText('system-line', info.hostname + ' · ' + info.cpu.model + ' · ' + info.cpu.cores + ' cores · ' + info.platform + ' ' + info.arch)
+    setText('system-line', info.hostname + ' · ' + info.cpu.model + ' · ' + countCores(info.cpu.cores) + ' · ' + info.platform + ' ' + info.arch)
 
     setText('uptime', formatDuration(info.uptimeSeconds))
     setText('kernel', 'Kernel ' + info.release)
 
     const loadPercent = toPercent(info.loadAverage.one, info.cpu.cores)
     setText('load-one', info.loadAverage.one.toFixed(2))
-    setText('load-percent', loadPercent + '% of ' + info.cpu.cores + ' cores')
+    setText('load-percent', loadPercent + '% of ' + countCores(info.cpu.cores))
     setMeter('load-bar', loadPercent)
     setText('load-detail', '5 min ' + info.loadAverage.five.toFixed(2) + ' · 15 min ' + info.loadAverage.fifteen.toFixed(2))
 
