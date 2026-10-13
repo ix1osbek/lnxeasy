@@ -2,8 +2,8 @@
 set -euo pipefail
 
 REPOSITORY="lnxeasy/lnxeasy"
-VERSION="0.3.0"
-TREE_SHA256="8f30556a4597880d1e52ed1928ed5210dc61fbbc39d83ac607fbb8d50dc8f80a"
+VERSION="0.4.0"
+TREE_SHA256="fb938c62752fb8bf54973947f5650d355e31faea06420434fdd528d7dd18a9cb"
 REF="${LNXEASY_REF:-}"
 NODE_LINE="latest-v22.x"
 
@@ -31,6 +31,7 @@ CUSTOM_CERT_FILE=""
 CUSTOM_KEY_FILE=""
 ACTION="install"
 MODE=""
+CHOSEN_PORT=""
 
 say() {
     printf '%s\n' "$*"
@@ -83,6 +84,47 @@ check_systemd() {
     if ! command -v systemctl >/dev/null 2>&1 || [ ! -d /run/systemd/system ]; then
         fail "systemd is required to run lnxeasy as a service, and it was not found on this machine."
     fi
+}
+
+planned_port() {
+    if [ -n "$CHOSEN_PORT" ]; then
+        say "$CHOSEN_PORT"
+        return
+    fi
+
+    read_config_value PORT "$DEFAULT_PORT"
+}
+
+describe_port_owner() {
+    local port="$1" owner
+
+    owner="$(ss -tlnpH "sport = :$port" 2>/dev/null | sed -n 's/.*users:(("\([^"]*\)",pid=\([0-9]*\).*/\1 (PID \2)/p' | head -n 1)"
+    if [ -z "$owner" ]; then
+        owner="another program"
+    fi
+
+    say "$owner"
+}
+
+check_port_is_free() {
+    local port current
+
+    if ! command -v ss >/dev/null 2>&1; then
+        return 0
+    fi
+
+    port="$(planned_port)"
+    current="$(read_config_value PORT "$DEFAULT_PORT")"
+
+    if [ "$port" = "$current" ] && systemctl is-active --quiet lnxeasy.service 2>/dev/null; then
+        return 0
+    fi
+
+    if [ -z "$(ss -tlnH "sport = :$port" 2>/dev/null)" ]; then
+        return 0
+    fi
+
+    fail "Port $port is already used by $(describe_port_owner "$port"). Nothing was installed. Choose a free port, for example: --port $((port + 1))"
 }
 
 download_node() {
@@ -219,6 +261,10 @@ write_config() {
 
     ensure_config_value HOST "0.0.0.0"
     ensure_config_value PORT "$DEFAULT_PORT"
+
+    if [ -n "$CHOSEN_PORT" ]; then
+        set_config_value PORT "$CHOSEN_PORT"
+    fi
     ensure_config_value AUTH_FILE "$AUTH_FILE"
     ensure_config_value TLS_CERT_FILE "$TLS_CERT_FILE"
     ensure_config_value TLS_KEY_FILE "$TLS_KEY_FILE"
@@ -455,6 +501,14 @@ check_helper() {
 }
 
 write_unit() {
+    local port low_port_lines=""
+
+    port="$(read_config_value PORT "$DEFAULT_PORT")"
+    if [ "$port" -lt 1024 ]; then
+        low_port_lines="AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE"
+    fi
+
     cat > "$UNIT_FILE" <<EOF
 [Unit]
 Description=lnxeasy server panel
@@ -476,6 +530,7 @@ ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
 ReadWritePaths=$STATE_DIR
+$low_port_lines
 
 [Install]
 WantedBy=multi-user.target
@@ -601,6 +656,28 @@ print_firewall_hint() {
     fi
 }
 
+print_firewalld_hint() {
+    local port="$1" as_root="$2"
+
+    if ! command -v firewall-cmd >/dev/null 2>&1; then
+        return 0
+    fi
+
+    if [ "$(firewall-cmd --state 2>/dev/null || true)" != "running" ]; then
+        return 0
+    fi
+
+    if firewall-cmd --list-ports 2>/dev/null | tr ' ' '\n' | grep -qx "$port/tcp"; then
+        return 0
+    fi
+
+    say ""
+    say "The firewalld firewall on this server is on and does not let port $port through,"
+    say "so the page will not open until you allow it:"
+    say ""
+    say "    ${as_root}firewall-cmd --permanent --add-port=$port/tcp && ${as_root}firewall-cmd --reload"
+}
+
 print_summary() {
     local host port address allowed fingerprint client as_root
 
@@ -672,11 +749,12 @@ print_summary() {
     fi
 
     print_firewall_hint "$port" "$(detect_client_address)" "$as_root"
+    print_firewalld_hint "$port" "$as_root"
 
     say ""
     say "After the first sign-in, open Security in the top bar and turn on two-step sign-in."
-    say "If the page keeps loading and never opens, a firewall is blocking TCP port $port:"
-    say "check the firewall of the server and the one in your hosting provider's panel."
+    say "lnxeasy answers on this server. If the page keeps loading in your browser and never opens,"
+    say "a firewall is blocking TCP port $port: check the one in your hosting provider's panel too."
     print_footer
 }
 
@@ -684,6 +762,7 @@ install_lnxeasy() {
     require_root
     check_system
     check_systemd
+    check_port_is_free
 
     mkdir -p "$INSTALL_DIR"
     download_node
@@ -710,7 +789,7 @@ uninstall_lnxeasy() {
     fi
 
     rm -f "$UNIT_FILE" "$COMMAND_FILE" "$HELPER_SOCKET_UNIT" "$HELPER_SERVICE_UNIT"
-    rm -rf "$INSTALL_DIR" "$CONFIG_DIR" "$STATE_DIR"
+    rm -rf "$INSTALL_DIR" "$CONFIG_DIR" "$STATE_DIR" "/run/lnxeasy"
 
     if command -v systemctl >/dev/null 2>&1; then
         systemctl daemon-reload || true
@@ -727,6 +806,7 @@ print_usage() {
     say "Usage: install.sh [options]"
     say ""
     say "  (no options)             Install lnxeasy, or update it and keep the settings"
+    say "  --port NUMBER            Use this port instead of $DEFAULT_PORT"
     say "  --allow-ip ADDRESS       Let only this address or range reach the panel (may be repeated)"
     say "  --cert FILE --key FILE   Use your own HTTPS certificate instead of a self-signed one"
     say "  --behind-proxy           Listen on this machine only, for a web server that adds HTTPS and a domain"
@@ -761,6 +841,17 @@ read_options() {
             --key)
                 [ "$#" -ge 2 ] || fail "--key needs a file."
                 CUSTOM_KEY_FILE="$2"
+                shift 2
+                ;;
+            --port)
+                [ "$#" -ge 2 ] || fail "--port needs a number."
+                case "$2" in
+                    *[!0-9]* | "") fail "\"$2\" is not a port number." ;;
+                esac
+                if [ "$2" -lt 1 ] || [ "$2" -gt 65535 ]; then
+                    fail "\"$2\" is not a port number. Use a number from 1 to 65535."
+                fi
+                CHOSEN_PORT="$2"
                 shift 2
                 ;;
             --behind-proxy)

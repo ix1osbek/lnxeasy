@@ -16,6 +16,7 @@ const state = {
     page: 1,
     paused: false,
     lastUpdate: null,
+    view: 'overview',
     serverAddress: null,
     ipHidden: readIpHidden()
 }
@@ -107,6 +108,11 @@ function createApiError(code, message) {
 function formatBytes(bytes) {
     const gibibyte = 1024 * 1024 * 1024
     const mebibyte = 1024 * 1024
+    const tebibyte = gibibyte * 1024
+
+    if (bytes >= tebibyte) {
+        return (bytes / tebibyte).toFixed(2) + ' TiB'
+    }
 
     if (bytes >= gibibyte) {
         return (bytes / gibibyte).toFixed(1) + ' GiB'
@@ -218,6 +224,8 @@ function renderServerAddress() {
 }
 
 function renderSystem(info) {
+    processView.system = info
+
     if (info.ipAddress) {
         state.serverAddress = info.ipAddress
     } else {
@@ -253,6 +261,54 @@ function renderSystem(info) {
         setText('swap-total', 'of ' + formatBytes(info.swap.totalBytes))
         setMeter('swap-bar', swapPercent)
         setText('swap-detail', swapPercent + '% used · ' + formatBytes(info.swap.freeBytes) + ' free')
+    }
+}
+
+function createDiskCard(disk) {
+    const card = createElement('article', 'disk')
+    const head = createElement('div', 'disk-head')
+    const meter = createElement('div', 'meter')
+    const fill = createElement('div', 'meter-fill')
+
+    let width = disk.usedPercent
+    if (width > 100) {
+        width = 100
+    }
+    fill.style.width = width + '%'
+    fill.classList.toggle('is-warn', disk.usedPercent >= 80 && disk.usedPercent < 90)
+    fill.classList.toggle('is-danger', disk.usedPercent >= 90)
+    meter.appendChild(fill)
+
+    head.appendChild(createElement('span', 'disk-mount', disk.mountPoint))
+    head.appendChild(createElement('span', 'disk-device', disk.device + ' · ' + disk.type))
+
+    card.appendChild(head)
+    card.appendChild(createElement('p', 'disk-value', formatBytes(disk.usedBytes) + ' of ' + formatBytes(disk.totalBytes)))
+    card.appendChild(meter)
+    card.appendChild(createElement('p', 'card-note', Math.round(disk.usedPercent) + '% used · ' + formatBytes(disk.availableBytes) + ' free'))
+
+    return card
+}
+
+function renderDisks(disks) {
+    const container = byId('disks')
+    container.textContent = ''
+
+    let totalBytes = 0
+    let availableBytes = 0
+
+    for (const disk of disks) {
+        container.appendChild(createDiskCard(disk))
+        totalBytes = totalBytes + disk.totalBytes
+        availableBytes = availableBytes + disk.availableBytes
+    }
+
+    if (disks.length === 0) {
+        setText('storage-note', 'No disks found')
+    } else if (disks.length === 1) {
+        setText('storage-note', formatBytes(availableBytes) + ' free of ' + formatBytes(totalBytes))
+    } else {
+        setText('storage-note', disks.length + ' file systems · ' + formatBytes(availableBytes) + ' free of ' + formatBytes(totalBytes))
     }
 }
 
@@ -406,7 +462,15 @@ function createPortRow(row) {
         pidCell.textContent = '—'
     } else {
         for (const process of row.processes) {
-            processCell.appendChild(createElement('div', 'process-line', process.name))
+            const line = createElement('div', 'process-line')
+            const link = createElement('button', 'process-link', process.name)
+            link.type = 'button'
+            link.title = 'Show details of ' + process.name
+            link.addEventListener('click', () => {
+                openProcess(process.pid)
+            })
+            line.appendChild(link)
+            processCell.appendChild(line)
             pidCell.appendChild(createElement('div', 'process-line', String(process.pid)))
         }
     }
@@ -447,7 +511,7 @@ function renderFilterCounts() {
     setSegmentCount('filter-process', 'hidden', countRows((row) => row.processes.length === 0))
 }
 
-function createPageButton(label, page, isActive, isDisabled) {
+function createPageButton(label, page, isActive, isDisabled, onPage) {
     const button = createElement('button', 'page-button', label)
     button.type = 'button'
     button.disabled = isDisabled
@@ -458,39 +522,39 @@ function createPageButton(label, page, isActive, isDisabled) {
     }
 
     button.addEventListener('click', () => {
-        state.page = page
-        renderPorts()
+        onPage(page)
     })
 
     return button
 }
 
-function renderPager(total, pageCount) {
-    const buttons = byId('pager-buttons')
+function drawPager(prefix, total, currentPage, pageSize, onPage) {
+    const buttons = byId(prefix + '-buttons')
     buttons.textContent = ''
 
     if (total === 0) {
-        setText('pager-range', '')
+        setText(prefix + '-range', '')
         return
     }
 
-    const first = (state.page - 1) * PAGE_SIZE + 1
-    let last = state.page * PAGE_SIZE
+    const pageCount = Math.ceil(total / pageSize)
+    const first = (currentPage - 1) * pageSize + 1
+    let last = currentPage * pageSize
     if (last > total) {
         last = total
     }
-    setText('pager-range', 'Showing ' + first + '–' + last + ' of ' + total)
+    setText(prefix + '-range', 'Showing ' + first + '–' + last + ' of ' + total)
 
     if (pageCount === 1) {
         return
     }
 
-    buttons.appendChild(createPageButton('Previous', state.page - 1, false, state.page === 1))
+    buttons.appendChild(createPageButton('Previous', currentPage - 1, false, currentPage === 1, onPage))
 
     let previousShown = 0
     for (let page = 1; page <= pageCount; page = page + 1) {
         const isEdge = page === 1 || page === pageCount
-        const isNear = page >= state.page - 1 && page <= state.page + 1
+        const isNear = page >= currentPage - 1 && page <= currentPage + 1
 
         if (!isEdge && !isNear) {
             continue
@@ -500,15 +564,15 @@ function renderPager(total, pageCount) {
             buttons.appendChild(createElement('span', 'page-gap', '…'))
         }
 
-        buttons.appendChild(createPageButton(String(page), page, page === state.page, false))
+        buttons.appendChild(createPageButton(String(page), page, page === currentPage, false, onPage))
         previousShown = page
     }
 
-    buttons.appendChild(createPageButton('Next', state.page + 1, false, state.page === pageCount))
+    buttons.appendChild(createPageButton('Next', currentPage + 1, false, currentPage === pageCount, onPage))
 }
 
 function renderSortHeaders() {
-    for (const button of document.querySelectorAll('.sort')) {
+    for (const button of document.querySelectorAll('#ports-table .sort')) {
         const isActive = button.dataset.sort === state.sortBy
         const arrow = button.querySelector('.sort-arrow')
 
@@ -570,7 +634,10 @@ function renderPorts() {
 
     renderFilterCounts()
     renderSortHeaders()
-    renderPager(matching.length, pageCount)
+    drawPager('pager', matching.length, state.page, PAGE_SIZE, (page) => {
+        state.page = page
+        renderPorts()
+    })
 }
 
 function setStatus(kind, text) {
@@ -606,15 +673,29 @@ async function refresh() {
         showError('system', error)
     }
 
-    try {
-        state.rows = mergePorts(await fetchData('/api/ports'))
-        hideError('ports')
-        anySuccess = true
-    } catch (error) {
-        state.rows = []
-        showError('ports', error)
+    if (state.view === 'processes') {
+        if (await refreshProcesses()) {
+            anySuccess = true
+        }
+    } else {
+        try {
+            renderDisks(await fetchData('/api/disks'))
+            hideError('disks')
+            anySuccess = true
+        } catch (error) {
+            showError('disks', error)
+        }
+
+        try {
+            state.rows = mergePorts(await fetchData('/api/ports'))
+            hideError('ports')
+            anySuccess = true
+        } catch (error) {
+            state.rows = []
+            showError('ports', error)
+        }
+        renderPorts()
     }
-    renderPorts()
 
     if (anySuccess) {
         state.lastUpdate = Date.now()
@@ -688,7 +769,7 @@ byId('filters-reset').addEventListener('click', () => {
     renderPorts()
 })
 
-for (const button of document.querySelectorAll('.sort')) {
+for (const button of document.querySelectorAll('#ports-table .sort')) {
     button.addEventListener('click', () => {
         if (state.sortBy === button.dataset.sort) {
             state.sortDescending = !state.sortDescending
@@ -934,6 +1015,42 @@ document.addEventListener('visibilitychange', () => {
     }
 })
 
-setInterval(tick, REFRESH_INTERVAL_MS)
-setInterval(renderUpdated, 1000)
-refresh()
+function showView(view) {
+    state.view = view
+
+    byId('view-overview').hidden = view !== 'overview'
+    byId('view-processes').hidden = view !== 'processes'
+
+    for (const tab of document.querySelectorAll('.tab')) {
+        const isActive = tab.dataset.view === view
+        tab.classList.toggle('is-active', isActive)
+        if (isActive) {
+            tab.setAttribute('aria-current', 'page')
+        } else {
+            tab.removeAttribute('aria-current')
+        }
+    }
+
+    if (view === 'overview') {
+        history.replaceState(null, '', '#overview')
+    } else {
+        history.replaceState(null, '', '#' + view)
+    }
+}
+
+for (const tab of document.querySelectorAll('.tab')) {
+    tab.addEventListener('click', () => {
+        showView(tab.dataset.view)
+        refresh()
+    })
+}
+
+function startApp() {
+    if (window.location.hash === '#processes') {
+        showView('processes')
+    }
+
+    setInterval(tick, REFRESH_INTERVAL_MS)
+    setInterval(renderUpdated, 1000)
+    refresh()
+}

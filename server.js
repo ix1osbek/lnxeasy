@@ -71,7 +71,10 @@ regModules(router, {
     readFile: fs.readFile,
     run: run,
     readSocket: readSocket,
-    helperSocket: config.helperSocket
+    helperSocket: config.helperSocket,
+    fs: fs,
+    now: now,
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 })
 
 const publicDirectory = path.join(import.meta.dirname, 'public')

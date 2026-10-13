@@ -31,6 +31,11 @@
         </button>
     </div>
 
+    <nav class="tabs" aria-label="Sections">
+        <button class="tab is-active" type="button" data-view="overview" aria-current="page">Overview</button>
+        <button class="tab" type="button" data-view="processes">Processes</button>
+    </nav>
+
     <div class="topbar-actions">
         <span class="updated" id="updated"></span>
         <span class="status" id="status">
@@ -39,7 +44,7 @@
         </span>
         <button class="button" id="toggle-refresh" type="button">Pause</button>
         <button class="button" id="open-security" type="button">Security</button>
-        <button class="button" id="sign-out" type="button">Sign out</button>
+        <button class="button button-danger" id="sign-out" type="button">Sign out</button>
     </div>
 </header>
 
@@ -49,6 +54,7 @@
         <span id="system-error-text"></span>
     </div>
 
+    <div id="view-overview">
     <section aria-labelledby="overview-title">
         <div class="section-head">
             <h2 class="section-title" id="overview-title">Overview</h2>
@@ -83,6 +89,20 @@
                 <p class="card-note" id="swap-detail"></p>
             </article>
         </div>
+    </section>
+
+    <section aria-labelledby="storage-title">
+        <div class="section-head">
+            <h2 class="section-title" id="storage-title">Storage</h2>
+            <span class="section-note" id="storage-note"></span>
+        </div>
+
+        <div class="alert" id="disks-error" hidden>
+            <strong id="disks-error-title"></strong>
+            <span id="disks-error-text"></span>
+        </div>
+
+        <div class="disks" id="disks"></div>
     </section>
 
     <section aria-labelledby="ports-title">
@@ -144,7 +164,7 @@
             </div>
 
             <div class="table-wrap">
-                <table class="table">
+                <table class="table" id="ports-table">
                     <thead>
                     <tr>
                         <th class="col-port"><button class="sort" type="button" data-sort="port">Port<span class="sort-arrow"></span></button></th>
@@ -170,6 +190,97 @@
             Rows marked “hidden” have no process that lnxeasy can see. Run the installer again to set up the helper that reads process names.
         </p>
     </section>
+    </div>
+
+    <div id="view-processes" hidden>
+        <section aria-labelledby="processes-title">
+            <div class="section-head">
+                <h2 class="section-title" id="processes-title">Processes</h2>
+                <span class="section-note" id="processes-summary"></span>
+            </div>
+
+            <div class="alert" id="processes-error" hidden>
+                <strong id="processes-error-title"></strong>
+                <span id="processes-error-text"></span>
+            </div>
+
+            <div class="usage">
+                <div class="usage-block">
+                    <h3 class="card-label">CPU <span class="usage-total" id="cpu-total"></span></h3>
+                    <div class="cores" id="cores"></div>
+                </div>
+                <div class="usage-block usage-side">
+                    <h3 class="card-label">Memory <span class="usage-total" id="usage-memory-text"></span></h3>
+                    <div class="meter"><div class="meter-fill" id="usage-memory-bar"></div></div>
+                    <h3 class="card-label usage-gap">Swap <span class="usage-total" id="usage-swap-text"></span></h3>
+                    <div class="meter"><div class="meter-fill" id="usage-swap-bar"></div></div>
+                    <h3 class="card-label usage-gap">Load average <span class="usage-total" id="usage-load"></span></h3>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="filters">
+                    <div class="search-box">
+                        <svg class="icon search-icon" viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="11" cy="11" r="7"/>
+                            <path d="M20 20l-4-4"/>
+                        </svg>
+                        <input class="search" id="processes-search" type="text" placeholder="Search name, command, user or PID"
+                               aria-label="Search processes" autocomplete="off" spellcheck="false">
+                        <button class="search-clear" id="processes-search-clear" type="button" aria-label="Clear search" hidden>
+                            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M6 6l12 12M18 6L6 18"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="filter-group">
+                        <span class="filter-label">Show</span>
+                        <div class="segmented" id="filter-kind">
+                            <button class="segment is-active" type="button" data-value="programs">Programs <span class="segment-count" data-count="programs"></span></button>
+                            <button class="segment" type="button" data-value="kernel">Kernel threads <span class="segment-count" data-count="kernel"></span></button>
+                            <button class="segment" type="button" data-value="all">All <span class="segment-count" data-count="all"></span></button>
+                        </div>
+                    </div>
+
+                    <div class="filter-group">
+                        <span class="filter-label">State</span>
+                        <div class="segmented" id="filter-state">
+                            <button class="segment is-active" type="button" data-value="all">Any</button>
+                            <button class="segment" type="button" data-value="active">Using CPU now</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-wrap">
+                    <table class="table table-processes" id="processes-table">
+                        <thead>
+                        <tr>
+                            <th class="col-number"><button class="sort" type="button" data-sort="pid">PID<span class="sort-arrow"></span></button></th>
+                            <th><button class="sort" type="button" data-sort="name">Name<span class="sort-arrow"></span></button></th>
+                            <th><button class="sort" type="button" data-sort="user">User<span class="sort-arrow"></span></button></th>
+                            <th class="col-number"><button class="sort" type="button" data-sort="cpuPercent">CPU %<span class="sort-arrow"></span></button></th>
+                            <th class="col-number"><button class="sort" type="button" data-sort="memoryBytes">Memory<span class="sort-arrow"></span></button></th>
+                            <th class="col-number"><button class="sort" type="button" data-sort="threads">Threads<span class="sort-arrow"></span></button></th>
+                            <th><button class="sort" type="button" data-sort="state">State<span class="sort-arrow"></span></button></th>
+                            <th><button class="sort" type="button" data-sort="startedAt">Running for<span class="sort-arrow"></span></button></th>
+                            <th class="col-command">Command</th>
+                        </tr>
+                        </thead>
+                        <tbody id="processes-body"></tbody>
+                    </table>
+                    <p class="empty" id="processes-empty" hidden>No processes match these filters.</p>
+                </div>
+
+                <div class="pager">
+                    <span class="pager-range" id="processes-pager-range"></span>
+                    <div class="pager-buttons" id="processes-pager-buttons"></div>
+                </div>
+            </div>
+
+            <p class="hint">Click a row to see everything about that process. CPU is measured between two refreshes; 100% is one full core.</p>
+        </section>
+    </div>
 </main>
 
 <footer class="footer">
@@ -266,6 +377,73 @@
     </div>
 </dialog>
 
+<dialog class="dialog dialog-wide" id="process-dialog">
+    <div class="dialog-head">
+        <div class="process-head">
+            <h2 class="dialog-title" id="process-name"></h2>
+            <span class="process-pid" id="process-pid"></span>
+            <span class="badge" id="process-state"></span>
+        </div>
+        <button class="icon-button" id="process-close" type="button" aria-label="Close">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18"/>
+            </svg>
+        </button>
+    </div>
+
+    <div class="dialog-body">
+        <p class="form-error dialog-message" id="process-error" role="alert" hidden></p>
+
+        <div id="process-content">
+            <section class="dialog-section">
+                <div class="facts">
+                    <div class="fact"><span class="fact-label">CPU</span><span class="fact-value" id="process-cpu"></span></div>
+                    <div class="fact"><span class="fact-label">Memory</span><span class="fact-value" id="process-memory"></span></div>
+                    <div class="fact"><span class="fact-label">Threads</span><span class="fact-value" id="process-threads"></span></div>
+                    <div class="fact"><span class="fact-label">User</span><span class="fact-value" id="process-user"></span></div>
+                    <div class="fact"><span class="fact-label">Started</span><span class="fact-value" id="process-started"></span></div>
+                    <div class="fact"><span class="fact-label">Running for</span><span class="fact-value" id="process-age"></span></div>
+                    <div class="fact"><span class="fact-label">Priority (nice)</span><span class="fact-value" id="process-nice"></span></div>
+                    <div class="fact"><span class="fact-label">Started by</span><span class="fact-value" id="process-parent"></span></div>
+                </div>
+            </section>
+
+            <section class="dialog-section">
+                <div class="subtitle-row">
+                    <h3 class="dialog-subtitle">Command</h3>
+                    <button class="button button-small" id="process-copy" type="button">Copy</button>
+                </div>
+                <p class="dialog-text">How this process was started: the program, then each option on its own line.</p>
+                <div class="command-box" id="process-command"></div>
+                <p class="dialog-text" id="process-executable"></p>
+            </section>
+
+            <section class="dialog-section">
+                <h3 class="dialog-subtitle">Listening ports</h3>
+                <p class="dialog-text" id="process-ports-empty">This process does not listen on any port.</p>
+                <table class="table table-compact" id="process-ports-table">
+                    <thead>
+                    <tr>
+                        <th>Port</th>
+                        <th>Protocol</th>
+                        <th>Address</th>
+                        <th>Reach</th>
+                    </tr>
+                    </thead>
+                    <tbody id="process-ports"></tbody>
+                </table>
+            </section>
+
+            <section class="dialog-section">
+                <h3 class="dialog-subtitle">Processes it started</h3>
+                <p class="dialog-text" id="process-children-empty">None.</p>
+                <div class="chips" id="process-children"></div>
+            </section>
+        </div>
+    </div>
+</dialog>
+
 <script src="/app.js"></script>
+<script src="/processes.js"></script>
 </body>
 </html>

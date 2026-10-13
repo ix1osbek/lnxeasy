@@ -39,6 +39,9 @@ function createFakeDependencies() {
         run: createFakeRun(),
         readSocket: async () => '',
         helperSocket: null,
+        fs: { readFile: async () => '', statfs: async () => ({}) },
+        now: () => 0,
+        sleep: async () => {},
     }
 }
 

@@ -9,22 +9,17 @@ A small web panel for watching an Ubuntu server from the browser instead of the 
 It runs on the server as a single Node.js process that serves both the web page and a JSON API.
 No external dependencies: only Node.js core modules on the server, plain HTML, CSS and JavaScript in the browser.
 
-> Early stage. The system overview and listening ports are available so far. Disks, processes,
-> services and server management are planned.
+> Early stage. The system overview, storage, listening ports and processes are available so far.
+> Services and server management are planned.
 
 ## Install on a server
-
-Logged in as root:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/lnxeasy/lnxeasy/main/install.sh | bash
-```
-
-Logged in as a regular user with sudo rights:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lnxeasy/lnxeasy/main/install.sh | sudo bash
 ```
+
+If the server answers `sudo: command not found`, you are already root: leave `sudo` out.
+You can run the command from any directory.
 
 Root is needed once, to install: the script creates a system user, writes to `/opt`, `/etc` and
 `/var/lib`, and registers a systemd service. After that lnxeasy itself runs as the unprivileged
@@ -46,8 +41,9 @@ lnxeasy is running.
 Open the address in the browser and sign in. The browser warns about the certificate once,
 because the installer creates a self-signed one.
 
-If the page keeps loading and never opens, a firewall is blocking TCP port 4321. Allow it on the server
-(`ufw allow 4321/tcp`) and in the firewall of your hosting provider's panel, if it has one.
+If the page keeps loading and never opens, a firewall is blocking TCP port 4321. The installer tells you
+when `ufw` or `firewalld` on the server is the cause and prints the command to allow the port.
+A firewall in your hosting provider's panel cannot be seen from the server: check it there.
 
 The commands below need root. If you are not root, put `sudo` in front of them.
 
@@ -72,6 +68,7 @@ curl -fsSL https://raw.githubusercontent.com/lnxeasy/lnxeasy/main/install.sh | b
 
 | Option | Effect |
 |--------|--------|
+| `--port NUMBER` | Use this port instead of 4321, for example `--port 443` so the address needs no port. The installer stops before changing anything when the port is taken. |
 | `--allow-ip ADDRESS` | Only this address or range can reach the panel. May be repeated. |
 | `--cert FILE --key FILE` | Use your own HTTPS certificate, for example one from Let's Encrypt, instead of a self-signed one. |
 | `--behind-proxy` | Listen on this machine only, for a web server that adds HTTPS and a domain. See below. |
@@ -85,6 +82,38 @@ curl -fsSLO https://raw.githubusercontent.com/lnxeasy/lnxeasy/main/install.sh
 less install.sh
 bash install.sh
 ```
+
+### A name instead of an IP address
+
+Typing `https://203.0.113.10:4321` every time is not pleasant. Without buying a domain you can give
+the server a name that works on your own computer, by adding one line to the computer's `hosts` file.
+Use the IP address of your server and any name you like; `lnxeasy.lan` is used here.
+
+**Linux and macOS.** In a terminal on your computer, not on the server:
+
+```bash
+echo "203.0.113.10 lnxeasy.lan" | sudo tee -a /etc/hosts
+```
+
+**Windows.** Click Start, type `notepad`, right-click Notepad and choose *Run as administrator*.
+Open the file `C:\Windows\System32\drivers\etc\hosts` (choose *All files* in the dialog to see it),
+add this line at the end and save:
+
+```
+203.0.113.10 lnxeasy.lan
+```
+
+Now open `https://lnxeasy.lan:4321`. If the old address still shows up, clear the name cache:
+`ipconfig /flushdns` on Windows, `sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder` on macOS.
+
+Things to know:
+
+- The name works only on computers where you added the line. For a name that works everywhere you need a real domain.
+- The `hosts` file maps a name to an address. It cannot hide the port. To drop `:4321` as well, either run
+  lnxeasy on the standard HTTPS port, if nothing else on the server uses it (`--port 443`, then the address is
+  just `https://lnxeasy.lan`), or put it behind your web server, described next.
+- The browser still warns about the certificate once for the new name, because the certificate is self-signed.
+- Do not pick a name that ends in `.local`: that ending is reserved and resolves slowly or not at all on some systems.
 
 ### A domain instead of a port
 
@@ -172,6 +201,9 @@ Open `http://127.0.0.1:4321` and sign in as `admin`. Change `HOST` and `PORT` in
 | `GET /api/health` | Returns `{"data":{"status":"ok"}}` |
 | `GET /api/system` | Hostname, IP address, kernel, uptime, CPU, load average, memory and swap |
 | `GET /api/ports` | Listening TCP and UDP ports and the processes that hold them |
+| `GET /api/disks` | Disks and other file systems with total, used and free space |
+| `GET /api/processes` | Every process with its CPU, memory, owner and command, plus CPU use per core |
+| `GET /api/process?pid=N` | One process with its parent, children and listening ports |
 | `POST /api/auth/login` | Signs in with `{"username", "password", "code"}` and sets the session cookie |
 | `POST /api/auth/logout` | Signs out |
 | `POST /api/auth/password` | Changes the password with `{"currentPassword", "newPassword"}` |
