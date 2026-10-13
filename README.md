@@ -14,9 +14,21 @@ No external dependencies: only Node.js core modules on the server, plain HTML, C
 
 ## Install on a server
 
+Logged in as root:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lnxeasy/lnxeasy/main/install.sh | bash
+```
+
+Logged in as a regular user with sudo rights:
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lnxeasy/lnxeasy/main/install.sh | sudo bash
 ```
+
+Root is needed once, to install: the script creates a system user, writes to `/opt`, `/etc` and
+`/var/lib`, and registers a systemd service. After that lnxeasy itself runs as the unprivileged
+`lnxeasy` user, never as root. [CODE_TOUR.md](CODE_TOUR.md) shows what every step does and where.
 
 The installer needs a Linux server with systemd (x86_64 or aarch64), `curl` and `openssl`.
 It does not need Node.js or git: it downloads its own copy of Node.js into `/opt/lnxeasy`.
@@ -35,23 +47,25 @@ Open the address in the browser and sign in. The browser warns about the certifi
 because the installer creates a self-signed one. If the page does not open, allow TCP port 4321
 in the firewall of the server and of your cloud provider.
 
+The commands below need root. If you are not root, put `sudo` in front of them.
+
 | Task | Command |
 |------|---------|
-| Change the password | **Security** in the top bar, or `sudo lnxeasy passwd` |
+| Change the password | **Security** in the top bar, or `lnxeasy passwd` |
 | Turn on two-step sign-in | **Security** in the top bar |
-| Lost the phone | `sudo lnxeasy two-step --disable` |
-| Let only your address in | `sudo lnxeasy allow 203.0.113.7` (back to everyone: `sudo lnxeasy allow --any`) |
-| Check the certificate | `sudo lnxeasy fingerprint` |
+| Lost the phone | `lnxeasy two-step --disable` |
+| Let only your address in | `lnxeasy allow 203.0.113.7` (back to everyone: `lnxeasy allow --any`) |
+| Check the certificate | `lnxeasy fingerprint` |
 | Status | `systemctl status lnxeasy` |
 | Log, including sign-ins | `journalctl -u lnxeasy -f` |
 | Settings | edit `/etc/lnxeasy/lnxeasy.env`, then `systemctl restart lnxeasy` |
 | Update | run the installer again |
-| Uninstall | `curl -fsSL https://raw.githubusercontent.com/lnxeasy/lnxeasy/main/install.sh \| sudo bash -s -- --uninstall` |
+| Uninstall | `curl -fsSL https://raw.githubusercontent.com/lnxeasy/lnxeasy/main/install.sh \| bash -s -- --uninstall` |
 
 ### Installer options
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lnxeasy/lnxeasy/main/install.sh | sudo bash -s -- --allow-ip 203.0.113.7
+curl -fsSL https://raw.githubusercontent.com/lnxeasy/lnxeasy/main/install.sh | bash -s -- --allow-ip 203.0.113.7
 ```
 
 | Option | Effect |
@@ -65,7 +79,7 @@ Prefer to read a script before running it as root? Download it first:
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/lnxeasy/lnxeasy/main/install.sh
 less install.sh
-sudo bash install.sh
+bash install.sh
 ```
 
 ### Security
@@ -75,9 +89,12 @@ five failed attempts, can be limited to chosen addresses and runs as an unprivil
 [SECURITY.md](SECURITY.md) lists everything it does, what it does not protect against,
 and how to report a problem.
 
+Want to check the code yourself before trusting it with a server? [CODE_TOUR.md](CODE_TOUR.md)
+walks through every file, says what it does and why, and lists commands that prove the claims.
+
 Recommended after installing:
 
-1. `sudo lnxeasy allow YOUR_IP_ADDRESS`
+1. `lnxeasy allow YOUR_IP_ADDRESS`
 2. Turn on two-step sign-in under **Security**.
 3. On the first visit, compare the certificate fingerprint in the browser with the one the installer printed.
 

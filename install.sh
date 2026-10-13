@@ -45,7 +45,7 @@ require_command() {
 
 require_root() {
     if [ "$(id -u)" -ne 0 ]; then
-        fail "This script must run as root. Try: curl -fsSL https://raw.githubusercontent.com/$REPOSITORY/main/install.sh | sudo bash"
+        fail "This script must run as root. Log in as root, or add sudo: curl -fsSL https://raw.githubusercontent.com/$REPOSITORY/main/install.sh | sudo bash"
     fi
 }
 
@@ -397,7 +397,12 @@ detect_client_address() {
 }
 
 print_summary() {
-    local host port address allowed fingerprint client
+    local host port address allowed fingerprint client as_root
+
+    as_root=""
+    if [ -n "${SUDO_USER:-}" ]; then
+        as_root="sudo "
+    fi
 
     host="$(read_config_value HOST 0.0.0.0)"
     port="$(read_config_value PORT "$DEFAULT_PORT")"
@@ -429,10 +434,10 @@ print_summary() {
         say "    Password:  $NEW_PASSWORD"
         say ""
         say "Write the password down now. It is not stored anywhere and will not be shown again."
-        say "You can change it in the browser, or with: sudo lnxeasy passwd"
+        say "You can change it in the browser, or with: ${as_root}lnxeasy passwd"
     else
         say ""
-        say "The admin account was kept. Forgot the password? Run: sudo lnxeasy passwd"
+        say "The admin account was kept. Forgot the password? Run: ${as_root}lnxeasy passwd"
     fi
 
     say ""
@@ -449,16 +454,16 @@ print_summary() {
     say ""
     if [ -n "$allowed" ]; then
         say "Only these addresses can reach the panel: $allowed"
-        say "Change the list with: sudo lnxeasy allow ADDRESS...   (or: sudo lnxeasy allow --any)"
+        say "Change the list with: ${as_root}lnxeasy allow ADDRESS...   (or: ${as_root}lnxeasy allow --any)"
     else
         say "The panel can be reached from any address. To let only your own address in:"
         client="$(detect_client_address)"
         if [ -n "$client" ]; then
             say ""
-            say "    sudo lnxeasy allow $client"
+            say "    ${as_root}lnxeasy allow $client"
         else
             say ""
-            say "    sudo lnxeasy allow YOUR_IP_ADDRESS"
+            say "    ${as_root}lnxeasy allow YOUR_IP_ADDRESS"
         fi
     fi
 
