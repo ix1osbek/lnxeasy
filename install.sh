@@ -2,8 +2,8 @@
 set -euo pipefail
 
 REPOSITORY="lnxeasy/lnxeasy"
-VERSION=""
-TREE_SHA256=""
+VERSION="0.2.0"
+TREE_SHA256="c19c2613550feec81bac81aef020645f6f8ea4615233c93578d34388a4486cde"
 REF="${LNXEASY_REF:-}"
 NODE_LINE="latest-v22.x"
 
