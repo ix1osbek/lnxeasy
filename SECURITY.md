@@ -20,13 +20,15 @@ in the release notes, with credit to you unless you prefer to stay anonymous.
 - **Passwords are never stored.** Only an scrypt hash with a random salt is kept, in a file
   that the `lnxeasy` user alone can read. Weak and common passwords are rejected.
 - **Two-step sign-in.** A time-based code from an authenticator app can be required after the password.
-  A code works once.
+  A code works once, also across restarts. While it is on, the answer never tells whether the password
+  alone was right: a wrong password and a wrong code look the same.
 - **HTTPS only.** The server refuses to listen on a public address without a certificate.
 - **Lockout.** Five failed attempts from one address lock that address out for 15 minutes.
-- **Address list.** The panel can be limited to chosen addresses. Everyone else gets no answer at all.
+- **Address list.** The panel can be limited to chosen addresses. Everyone else gets no answer at all,
+  including other users on the server itself; only the health check that the installer uses is answered locally.
 - **Request limits.** Requests per address, open connections, request size and request time are capped.
 - **Sessions.** Random 256-bit tokens in a cookie that is `HttpOnly`, `Secure` and `SameSite=Strict`.
-  Requests that change something are rejected when they come from another site.
+  Requests that change something must carry an `Origin` header of this site, and are rejected otherwise.
 - **Strict Content Security Policy.** The page loads nothing from other servers and runs no inline scripts.
 - **No shell.** Commands are started with fixed arguments. Nothing a visitor sends is passed to a command.
 - **No dependencies.** The server uses only Node.js core modules.
@@ -34,8 +36,15 @@ in the release notes, with credit to you unless you prefer to stay anonymous.
 - **Privilege separation.** The one thing that needs root, reading the process names behind ports,
   is done by a separate helper that runs a single fixed command and accepts no input.
 - **Proxy headers are not trusted by default.** `X-Forwarded-For` is believed only from the addresses
-  listed in `TRUSTED_PROXIES`.
+  listed in `TRUSTED_PROXIES`. When a trusted proxy does not send it, lnxeasy refuses the request instead of
+  treating every visitor as the same address.
 - **Activity log.** Sign-ins, failed attempts and lockouts are written to the system log and shown in the panel.
+
+## Past reviews
+
+| Date | Review | Result |
+|------|--------|--------|
+| October 2026 | Hands-on test against a local installation: unauthorised access, path traversal, injection, XSS, user enumeration, brute force, flooding, code reuse, cookies | No critical or high findings. Six low and medium findings, all fixed in 0.4.1: password check visible while two-step sign-in was on, writes without an `Origin` header accepted, this machine exempt from the address list, missing proxy header accepted, code reuse possible after a restart, no CSP on API answers. |
 
 ## What it does not protect against
 

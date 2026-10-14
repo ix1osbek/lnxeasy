@@ -84,10 +84,12 @@ async function setPassword(store, generate) {
 
     let username = DEFAULT_USERNAME
     let totpSecret = null
+    let totpLastStep = 0
     const existing = await store.load()
     if (existing !== null) {
         username = existing.username
         totpSecret = existing.totpSecret
+        totpLastStep = existing.totpLastStep
     }
 
     const hashed = await hashPassword(password)
@@ -95,7 +97,8 @@ async function setPassword(store, generate) {
         username: username,
         salt: hashed.salt,
         hash: hashed.hash,
-        totpSecret: totpSecret
+        totpSecret: totpSecret,
+        totpLastStep: totpLastStep
     })
 
     if (generate) {
@@ -118,7 +121,8 @@ async function disableTwoStep(store) {
         username: account.username,
         salt: account.salt,
         hash: account.hash,
-        totpSecret: null
+        totpSecret: null,
+        totpLastStep: 0
     })
 
     console.log('Two-step sign-in is off. Sign in with the password alone and set it up again.')
@@ -174,7 +178,7 @@ async function allowAddresses(args) {
 
     await writeAllowedAddresses(args)
     console.log('Only these addresses may connect: ' + args.join(', '))
-    console.log('Connections from this machine itself are always allowed.')
+    console.log('From this machine itself only the health check used by the installer is answered.')
     await restartService()
 }
 

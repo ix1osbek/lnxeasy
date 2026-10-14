@@ -60,8 +60,13 @@ export class UnauthorizedError extends AppError {
 
 
 export class InvalidCredentialsError extends AppError {
-    constructor() {
-        super(401, 'INVALID_CREDENTIALS', 'Wrong username or password')
+    constructor(withCode) {
+        let message = 'Wrong username or password'
+        if (withCode === true) {
+            message = 'Wrong username, password or code'
+        }
+
+        super(401, 'INVALID_CREDENTIALS', message)
         this.name = 'InvalidCredentialsError'
     }
 }
@@ -112,6 +117,14 @@ export class RateLimitedError extends AppError {
     constructor() {
         super(429, 'RATE_LIMITED', 'Too many requests. Slow down and try again in a minute.')
         this.name = 'RateLimitedError'
+    }
+}
+
+
+export class ProxyHeaderMissingError extends AppError {
+    constructor() {
+        super(400, 'PROXY_HEADER_MISSING', 'The web server in front of lnxeasy does not pass on the visitor address (X-Forwarded-For). See "A domain instead of a port" in the README.')
+        this.name = 'ProxyHeaderMissingError'
     }
 }
 

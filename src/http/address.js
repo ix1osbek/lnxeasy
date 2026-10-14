@@ -14,6 +14,16 @@ export function normalizeAddress(address) {
     return address
 }
 
+export function isLoopback(address) {
+    const normalized = normalizeAddress(address)
+
+    if (normalized === '::1') {
+        return true
+    }
+
+    return isIP(normalized) === 4 && normalized.startsWith('127.')
+}
+
 export function readClientAddress(req) {
     if (typeof req.clientAddress === 'string') {
         return req.clientAddress
@@ -74,8 +84,6 @@ export class AddressFilter {
             }
         }
 
-        this.list.addSubnet('127.0.0.0', 8, 'ipv4')
-        this.list.addAddress('::1', 'ipv6')
     }
 
     allows(address) {
@@ -134,7 +142,7 @@ export class ClientPolicy {
     }
 
     allowsConnection(address) {
-        if (this.isTrustedProxy(address)) {
+        if (this.isTrustedProxy(address) || isLoopback(address)) {
             return true
         }
 
@@ -150,14 +158,14 @@ export class ClientPolicy {
 
         const header = req.headers['x-forwarded-for']
         if (typeof header !== 'string') {
-            return peer
+            return null
         }
 
         const parts = header.split(',')
         const forwarded = normalizeAddress(parts[parts.length - 1].trim())
 
         if (familyName(forwarded) === null) {
-            return peer
+            return null
         }
 
         return forwarded

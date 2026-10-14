@@ -146,7 +146,7 @@ src/
     disks/              Disk space: reads /proc/mounts and asks the kernel for sizes.
 
 public/                 The page: plain HTML, CSS and JavaScript.
-tests/                  205 tests, run with "npm test".
+tests/                  217 tests, run with "npm test".
 ```
 
 Imports go one way: `http/` and `auth/` may use `core/`, `modules/` may use `core/`,
@@ -231,7 +231,8 @@ Behind a web server (`--behind-proxy`) every connection comes from that web serv
 real address has to be read from the `X-Forwarded-For` header. `ClientPolicy.identify` in
 [`src/http/address.js`](src/http/address.js) does that, and only when the connection comes from an
 address listed in `TRUSTED_PROXIES`. From anyone else the header is ignored, so a visitor cannot
-pretend to be another address.
+pretend to be another address. When a trusted proxy leaves the header out, the request is refused
+with `PROXY_HEADER_MISSING`.
 
 ## 3. The life of one request
 
@@ -240,9 +241,9 @@ The order of the checks is the order below.
 
 | # | Check | File | If it fails |
 |---|-------|------|-------------|
-| 1 | Is this address on the list? (at connection time) | [`src/http/address.js`](src/http/address.js) | Connection closed, no answer |
+| 1 | Is this address on the list? Checked when the connection opens and again for every request, so that the real visitor behind a proxy is checked too. Only the health check is answered to this machine itself. | [`src/http/address.js`](src/http/address.js), [`src/http/app.js`](src/http/app.js) | Connection closed, no answer |
 | 2 | Fewer than 300 requests this minute from this address? | [`src/http/rate.js`](src/http/rate.js) | 429 |
-| 3 | Does a request that changes something come from this site? | `checkOrigin` in [`src/auth/guard.js`](src/auth/guard.js) | 403 |
+| 3 | Does a request that changes something carry an `Origin` of this site? | `checkOrigin` in [`src/auth/guard.js`](src/auth/guard.js) | 403 |
 | 4 | Is the path public, or is there a valid session? | `isPublic`, `isAuthenticated` in [`src/auth/guard.js`](src/auth/guard.js) | 401 for the API, redirect to `/login` for pages |
 | 5 | Is there a handler for this method and path? | [`src/http/router.js`](src/http/router.js) | 404 |
 | 6 | Run the handler | a `*.routes.js` file | Any error is caught in step 7 |
@@ -271,7 +272,10 @@ Start at `login` in [`src/auth/auth.service.js`](src/auth/auth.service.js). It r
 3. **Check the username** in constant time too. A wrong username and a wrong password give the same answer.
 4. **Check the two-step code**, if it is turned on. [`src/auth/totp.js`](src/auth/totp.js) is the standard
    algorithm (RFC 6238) in 87 lines; the tests check it against the values published in the RFC.
-   A code that was already used is refused.
+   A code that was already used is refused, also after a restart: the last used step is kept in the
+   account file. When two-step sign-in is on and no code was sent, lnxeasy asks for the code before it
+   looks at the password, and a wrong password and a wrong code get the same answer, so the password
+   cannot be tested on its own.
 5. **Create a session.** [`src/auth/sessions.js`](src/auth/sessions.js): 32 random bytes from the
    operating system. Sessions live in memory for 24 hours and are gone when the service restarts.
 6. **Send the cookie.** [`src/http/cookies.js`](src/http/cookies.js): `HttpOnly` (scripts cannot read it),

@@ -1,8 +1,10 @@
-import {AppError, UnauthorizedError} from '../core/errors.js'
+import {AppError, ProxyHeaderMissingError, UnauthorizedError} from '../core/errors.js'
 import {sendError} from './response.js'
+import {isLoopback, normalizeAddress} from './address.js'
 
 const LOGIN_PATH = '/login'
 const LOGIN_FILE = '/login.html'
+const HEALTH_PATH = '/api/health'
 
 export class App {
     constructor(router, staticFiles, guard, requestLimiter, clientPolicy) {
@@ -43,17 +45,28 @@ export class App {
     }
 
     async handle(req, res) {
-        req.clientAddress = this.clientPolicy.identify(req)
+        const path = req.url.split('?')[0]
+        const isHealthCheck = path === HEALTH_PATH
+        let clientAddress = this.clientPolicy.identify(req)
 
-        if (!this.clientPolicy.allows(req.clientAddress)) {
+        if (clientAddress === null) {
+            if (!isHealthCheck) {
+                sendError(res, new ProxyHeaderMissingError())
+                return
+            }
+            clientAddress = normalizeAddress(req.socket.remoteAddress)
+        }
+
+        req.clientAddress = clientAddress
+
+        const allowed = this.clientPolicy.allows(clientAddress) || (isHealthCheck && isLoopback(clientAddress))
+        if (!allowed) {
             req.socket.destroy()
             return
         }
 
         try {
             this.requestLimiter.check(req)
-
-            const path = req.url.split('?')[0]
 
             if (path.startsWith('/api/')) {
                 await this.handleApi(req, res, path)

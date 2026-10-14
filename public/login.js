@@ -80,11 +80,10 @@ async function signIn() {
 
     showError(withFullStop(message))
 
-    if (code === 'INVALID_CODE') {
-        codeInput.select()
-    } else {
-        document.getElementById('password').select()
+    if (!codeField.hidden) {
+        codeInput.value = ''
     }
+    document.getElementById('password').select()
 }
 
 form.addEventListener('submit', async (event) => {

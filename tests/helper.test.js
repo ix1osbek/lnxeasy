@@ -6,7 +6,7 @@ import path from 'node:path'
 import * as fs from 'node:fs/promises'
 import { readSocket, SocketUnavailableError } from '../src/core/socket.js'
 import { PortsSource } from '../src/modules/ports/ports.source.js'
-import { AddressFilter, ClientPolicy, readClientAddress } from '../src/http/address.js'
+import { AddressFilter, ClientPolicy, isLoopback, readClientAddress } from '../src/http/address.js'
 import { loadConfig } from '../src/config.js'
 
 const SS_TEXT = 'tcp LISTEN 0 128 0.0.0.0:22 0.0.0.0:* users:(("sshd",pid=900,fd=3))\n'
@@ -141,12 +141,31 @@ test('ClientPolicy does not believe X-Forwarded-For from an address that is not 
     assert.equal(policy.identify(createRequest('172.18.0.3', '203.0.113.5')), '203.0.113.5')
 })
 
-test('ClientPolicy falls back to the proxy address when the header is missing or not an address', () => {
+test('ClientPolicy cannot tell the visitor when the trusted proxy sends no usable header', () => {
     const policy = new ClientPolicy(new AddressFilter([]), ['127.0.0.1'])
 
-    assert.equal(policy.identify(createRequest('127.0.0.1')), '127.0.0.1')
-    assert.equal(policy.identify(createRequest('127.0.0.1', 'unknown')), '127.0.0.1')
-    assert.equal(policy.identify(createRequest('127.0.0.1', '203.0.113.5, <script>')), '127.0.0.1')
+    assert.equal(policy.identify(createRequest('127.0.0.1')), null)
+    assert.equal(policy.identify(createRequest('127.0.0.1', 'unknown')), null)
+    assert.equal(policy.identify(createRequest('127.0.0.1', '203.0.113.5, <script>')), null)
+})
+
+test('ClientPolicy lets this machine connect, so that the health check works with an address list', () => {
+    const policy = new ClientPolicy(new AddressFilter(['203.0.113.5']), [])
+
+    assert.equal(policy.allowsConnection('127.0.0.1'), true)
+    assert.equal(policy.allowsConnection('::ffff:127.0.0.1'), true)
+    assert.equal(policy.allowsConnection('::1'), true)
+    assert.equal(policy.allows('127.0.0.1'), false)
+})
+
+test('isLoopback recognises only this machine', () => {
+    assert.equal(isLoopback('127.0.0.1'), true)
+    assert.equal(isLoopback('127.8.8.8'), true)
+    assert.equal(isLoopback('::ffff:127.0.0.1'), true)
+    assert.equal(isLoopback('::1'), true)
+    assert.equal(isLoopback('127.example.com'), false)
+    assert.equal(isLoopback('10.0.0.1'), false)
+    assert.equal(isLoopback(undefined), false)
 })
 
 test('ClientPolicy applies the address list to the real client behind a proxy', () => {
