@@ -95,6 +95,9 @@ Use the IP address of your server and any name you like; `lnxeasy.lan` is used h
 echo "203.0.113.10 lnxeasy.lan" | sudo tee -a /etc/hosts
 ```
 
+The file belongs to the system, so it needs `sudo`. If you prefer an editor, open it with
+`sudo nano /etc/hosts`; without `sudo`, nano shows "Permission denied" when you save.
+
 **Windows.** Click Start, type `notepad`, right-click Notepad and choose *Run as administrator*.
 Open the file `C:\Windows\System32\drivers\etc\hosts` (choose *All files* in the dialog to see it),
 add this line at the end and save:
@@ -147,6 +150,8 @@ panel.example.com {
 Both headers matter. `Host` is how lnxeasy tells its own pages from other sites, and
 `X-Forwarded-For` is the visitor's address, used for the lockout, the address list and the activity log.
 lnxeasy believes that header only from the addresses in `TRUSTED_PROXIES` (the installer sets `127.0.0.1`).
+If the web server forgets to send it, the page shows the error `PROXY_HEADER_MISSING` instead of
+quietly treating every visitor as one address.
 
 If the web server runs in a container, it reaches the host through another address. Set these in
 `/etc/lnxeasy/lnxeasy.env` by hand, with the addresses of your container network:
@@ -211,7 +216,9 @@ Open `http://127.0.0.1:4321` and sign in as `admin`. Change `HOST` and `PORT` in
 | `GET /api/auth/events` | Recent sign-ins and failed attempts |
 | `POST /api/auth/two-step/setup`, `/enable`, `/disable` | Manage two-step sign-in |
 
-Every endpoint except `/api/health` and `/api/auth/login` requires a session.
+Every endpoint except `/api/health` and `/api/auth/login` requires a session. Requests that change
+something (`POST`) must also carry an `Origin` header matching the address of the panel; browsers add it
+by themselves, scripts have to set it.
 
 Successful responses look like `{ "data": ... }`, errors like
 `{ "error": { "code": "NOT_FOUND", "message": "..." } }`.

@@ -43,7 +43,10 @@ export class AccessGuard {
 
         const origin = req.headers.origin
         if (origin === undefined) {
-            return
+            if (fetchSite === 'same-origin') {
+                return
+            }
+            throw new ForbiddenError('Requests that change something must say where they come from (Origin header)')
         }
 
         let originHost = ''

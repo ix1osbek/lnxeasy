@@ -33,6 +33,7 @@ test('sendJson writes the status, the JSON content type and wraps data', () => {
 
     assert.equal(res.statusCode, 200)
     assert.equal(res.headers['Content-Type'], 'application/json; charset=utf-8')
+    assert.equal(res.headers['Content-Security-Policy'], "default-src 'none'; frame-ancestors 'none'")
     assert.deepEqual(JSON.parse(res.body), { data: { hostname: 'server-1' } })
     assert.equal(res.ended, true)
 })
@@ -53,6 +54,7 @@ test('sendError uses the status, code and message of an AppError', () => {
 
     assert.equal(res.statusCode, 400)
     assert.equal(res.headers['Content-Type'], 'application/json; charset=utf-8')
+    assert.equal(res.headers['Content-Security-Policy'], "default-src 'none'; frame-ancestors 'none'")
     assert.deepEqual(JSON.parse(res.body), {
         error: { code: 'BAD_REQUEST', message: 'Missing name' },
     })

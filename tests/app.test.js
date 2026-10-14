@@ -406,3 +406,77 @@ test('handle stores the client address the policy found on the request', async (
 
     assert.equal(seen, '203.0.113.5')
 })
+
+function createPolicy(identified, allowed) {
+    return {
+        identify: () => identified,
+        allows: (address) => allowed.includes(address),
+    }
+}
+
+function createRequestFrom(method, url, remoteAddress) {
+    const req = createFakeRequest(method, url)
+    req.destroyed = false
+    req.socket = {
+        remoteAddress: remoteAddress,
+        destroy: () => {
+            req.destroyed = true
+        },
+    }
+    return req
+}
+
+function createHealthRouter() {
+    const router = new Router()
+    router.get('/api/health', (req, res) => {
+        sendJson(res, 200, { status: 'ok' })
+    })
+    router.get('/api/system', (req, res) => {
+        sendJson(res, 200, {})
+    })
+    return router
+}
+
+test('handle answers 400 when the trusted proxy does not pass the visitor address on', async () => {
+    const app = new App(createHealthRouter(), createFakeStaticFiles(), createOpenGuard(), createOpenLimiter(), createPolicy(null, []))
+    const res = createFakeResponse()
+
+    await app.handle(createRequestFrom('GET', '/api/system', '127.0.0.1'), res)
+
+    assert.equal(res.statusCode, 400)
+    assert.equal(JSON.parse(res.body).error.code, 'PROXY_HEADER_MISSING')
+})
+
+test('handle still answers the health check from this machine when the proxy header is missing', async () => {
+    const app = new App(createHealthRouter(), createFakeStaticFiles(), createOpenGuard(), createOpenLimiter(), createPolicy(null, []))
+    const res = createFakeResponse()
+
+    await app.handle(createRequestFrom('GET', '/api/health', '127.0.0.1'), res)
+
+    assert.equal(res.statusCode, 200)
+})
+
+test('handle hangs up on this machine too when an address list is set, except for the health check', async () => {
+    const app = new App(createHealthRouter(), createFakeStaticFiles(), createOpenGuard(), createOpenLimiter(), createPolicy('127.0.0.1', ['203.0.113.5']))
+
+    const page = createRequestFrom('GET', '/api/system', '127.0.0.1')
+    const pageRes = createFakeResponse()
+    await app.handle(page, pageRes)
+    assert.equal(page.destroyed, true)
+    assert.equal(pageRes.statusCode, null)
+
+    const health = createRequestFrom('GET', '/api/health', '127.0.0.1')
+    const healthRes = createFakeResponse()
+    await app.handle(health, healthRes)
+    assert.equal(health.destroyed, false)
+    assert.equal(healthRes.statusCode, 200)
+})
+
+test('handle does not let another address use the health check exception', async () => {
+    const app = new App(createHealthRouter(), createFakeStaticFiles(), createOpenGuard(), createOpenLimiter(), createPolicy('198.51.100.9', ['203.0.113.5']))
+    const req = createRequestFrom('GET', '/api/health', '198.51.100.9')
+
+    await app.handle(req, createFakeResponse())
+
+    assert.equal(req.destroyed, true)
+})

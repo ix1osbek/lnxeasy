@@ -134,7 +134,7 @@ test('AuthStore saves the account into a file only the owner can read', async ()
 
     await store.save({ username: 'admin', salt: 'aa', hash: 'bb', extra: 'ignored' })
 
-    assert.deepEqual(await store.load(), { username: 'admin', salt: 'aa', hash: 'bb', totpSecret: null })
+    assert.deepEqual(await store.load(), { username: 'admin', salt: 'aa', hash: 'bb', totpSecret: null, totpLastStep: 0 })
     assert.equal((await fs.stat(filePath)).mode & 0o777, 0o600)
     assert.deepEqual(await fs.readdir(path.dirname(filePath)), ['auth.json'])
 
@@ -358,7 +358,8 @@ test('AccessGuard lets reads through and checks where writes come from', () => {
 
     assert.doesNotThrow(() => guard.checkOrigin({ method: 'GET', headers: { host: host, origin: 'https://evil.example' } }))
     assert.doesNotThrow(() => guard.checkOrigin({ method: 'POST', headers: { host: host, origin: 'https://203.0.113.10:4321' } }))
-    assert.doesNotThrow(() => guard.checkOrigin({ method: 'POST', headers: { host: host } }))
+    assert.doesNotThrow(() => guard.checkOrigin({ method: 'POST', headers: { host: host, 'sec-fetch-site': 'same-origin' } }))
+    assert.throws(() => guard.checkOrigin({ method: 'POST', headers: { host: host } }), ForbiddenError)
 
     assert.throws(() => guard.checkOrigin({ method: 'POST', headers: { host: host, origin: 'https://evil.example' } }), ForbiddenError)
     assert.throws(() => guard.checkOrigin({ method: 'POST', headers: { host: host, origin: 'https://203.0.113.10:9999' } }), ForbiddenError)
@@ -498,7 +499,7 @@ test('login asks for the code when two-step sign-in is on', async () => {
     await assert.rejects(service.login('admin', 'correct horse battery', undefined, '1.2.3.4'), TotpRequiredError)
     await assert.rejects(service.login('admin', 'correct horse battery', '', '1.2.3.4'), TotpRequiredError)
     await assert.rejects(service.login('admin', 'wrong password!', '123456', '1.2.3.4'), InvalidCredentialsError)
-    await assert.rejects(service.login('admin', 'correct horse battery', '000000', '1.2.3.4'), InvalidCodeError)
+    await assert.rejects(service.login('admin', 'correct horse battery', '000000', '1.2.3.4'), InvalidCredentialsError)
 
     const code = computeTotpCode(secret, getTimeStep(clock.time))
     const token = await service.login('admin', 'correct horse battery', code, '1.2.3.4')
@@ -512,7 +513,7 @@ test('a two-step code cannot be used twice', async () => {
 
     await service.login('admin', 'correct horse battery', code, '1.2.3.4')
 
-    await assert.rejects(service.login('admin', 'correct horse battery', code, '7.7.7.7'), InvalidCodeError)
+    await assert.rejects(service.login('admin', 'correct horse battery', code, '7.7.7.7'), InvalidCredentialsError)
 })
 
 test('wrong two-step codes lock the address out like wrong passwords', async () => {
@@ -520,7 +521,7 @@ test('wrong two-step codes lock the address out like wrong passwords', async () 
     clock.time = clock.time + MINUTE
 
     for (let i = 0; i < 5; i = i + 1) {
-        await assert.rejects(service.login('admin', 'correct horse battery', '000000', '6.6.6.6'), InvalidCodeError)
+        await assert.rejects(service.login('admin', 'correct horse battery', '000000', '6.6.6.6'), InvalidCredentialsError)
     }
 
     await assert.rejects(service.login('admin', 'correct horse battery', '000000', '6.6.6.6'), TooManyAttemptsError)
@@ -635,15 +636,15 @@ test('AddressFilter lets everyone in when the list is empty', () => {
     assert.equal(filter.allows('2001:db8::1'), true)
 })
 
-test('AddressFilter lets in only the listed addresses and this machine', () => {
+test('AddressFilter lets in only the listed addresses, not even this machine', () => {
     const filter = new AddressFilter(['203.0.113.10', '10.8.0.0/16', '2001:db8::/32'])
 
     assert.equal(filter.allows('203.0.113.10'), true)
     assert.equal(filter.allows('::ffff:203.0.113.10'), true)
     assert.equal(filter.allows('10.8.200.3'), true)
     assert.equal(filter.allows('2001:db8:1::5'), true)
-    assert.equal(filter.allows('127.0.0.1'), true)
-    assert.equal(filter.allows('::1'), true)
+    assert.equal(filter.allows('127.0.0.1'), false)
+    assert.equal(filter.allows('::1'), false)
 
     assert.equal(filter.allows('203.0.113.11'), false)
     assert.equal(filter.allows('10.9.0.1'), false)
@@ -666,4 +667,79 @@ test('RequestLimiter stops one address after its limit and starts again next win
 
     clock.time = clock.time + MINUTE
     assert.doesNotThrow(() => limiter.check(noisy))
+})
+
+test('with two-step sign-in on, a missing code is asked for before the password is checked', async () => {
+    const { service, logLines } = await createServiceWithTwoStep()
+    const before = logLines.length
+
+    await assert.rejects(service.login('admin', 'wrong password!', undefined, '6.6.6.6'), TotpRequiredError)
+    await assert.rejects(service.login('admin', 'correct horse battery', undefined, '6.6.6.6'), TotpRequiredError)
+
+    assert.equal(logLines.length, before)
+})
+
+test('with two-step sign-in on, a wrong password and a wrong code give the same answer', async () => {
+    const { service, clock } = await createServiceWithTwoStep()
+    clock.time = clock.time + MINUTE
+    const answers = []
+
+    for (const password of ['wrong password!', 'correct horse battery']) {
+        try {
+            await service.login('admin', password, '000000', '6.6.6.' + answers.length)
+        } catch (error) {
+            answers.push(error.code + ' ' + error.message)
+        }
+    }
+
+    assert.deepEqual(answers, [
+        'INVALID_CREDENTIALS Wrong username, password or code',
+        'INVALID_CREDENTIALS Wrong username, password or code',
+    ])
+})
+
+test('a used two-step code stays used after lnxeasy restarts', async () => {
+    const { store, clock, secret } = await createServiceWithTwoStep()
+    clock.time = clock.time + MINUTE
+    const code = computeTotpCode(secret, getTimeStep(clock.time))
+
+    const first = new AuthService(store, new SessionStore(60 * MINUTE, clock.now), new LoginLimiter(clock.now), clock.now, () => {})
+    await first.login('admin', 'correct horse battery', code, '1.2.3.4')
+
+    const afterRestart = new AuthService(store, new SessionStore(60 * MINUTE, clock.now), new LoginLimiter(clock.now), clock.now, () => {})
+    await assert.rejects(afterRestart.login('admin', 'correct horse battery', code, '1.2.3.4'), InvalidCredentialsError)
+    assert.equal(store.account.totpLastStep, getTimeStep(clock.time))
+})
+
+test('changing the password keeps the record of the last used code', async () => {
+    const { service, store, token } = await createServiceWithTwoStep()
+    const lastStep = store.account.totpLastStep
+
+    await service.changePassword(token, 'correct horse battery', 'fresh-secret-phrase-42', '1.2.3.4')
+
+    assert.equal(store.account.totpLastStep, lastStep)
+    assert.notEqual(lastStep, 0)
+})
+
+test('AuthStore keeps the step of the last used code and ignores a broken value', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'lnxeasy-test-'))
+    const filePath = path.join(directory, 'auth.json')
+    const store = new AuthStore(filePath, fs)
+
+    await store.save({ username: 'admin', salt: 'aa', hash: 'bb', totpSecret: 'GEZDGNBV', totpLastStep: 56666666 })
+    assert.equal((await store.load()).totpLastStep, 56666666)
+
+    await fs.writeFile(filePath, '{"username":"admin","salt":"aa","hash":"bb","totpLastStep":"soon"}')
+    assert.equal((await store.load()).totpLastStep, 0)
+
+    await fs.rm(directory, { recursive: true })
+})
+
+test('AccessGuard refuses a write that carries no hint of where it comes from', () => {
+    const guard = new AccessGuard({ getSession: () => null }, 'sid')
+
+    assert.throws(
+        () => guard.checkOrigin({ method: 'POST', headers: { host: '203.0.113.10:4321' } }),
+        { code: 'FORBIDDEN', message: 'Requests that change something must say where they come from (Origin header)' }
+    )
 })

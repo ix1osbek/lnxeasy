@@ -90,13 +90,38 @@ export class AuthService {
         }
     }
 
-    useTotpCode(secret, code) {
+    async saveAccount(account, changes) {
+        const next = {
+            username: account.username,
+            salt: account.salt,
+            hash: account.hash,
+            totpSecret: account.totpSecret,
+            totpLastStep: account.totpLastStep
+        }
+
+        for (const key of Object.keys(changes)) {
+            next[key] = changes[key]
+        }
+
+        await this.store.save(next)
+    }
+
+    async useTotpCode(account, secret, code) {
         const step = findTotpStep(secret, code, this.now())
-        if (step === null || step <= this.lastTotpStep) {
+
+        let lastStep = this.lastTotpStep
+        if (account.totpLastStep > lastStep) {
+            lastStep = account.totpLastStep
+        }
+
+        if (step === null || step <= lastStep) {
             return false
         }
 
         this.lastTotpStep = step
+        account.totpLastStep = step
+        await this.saveAccount(account, {})
+
         return true
     }
 
@@ -117,23 +142,23 @@ export class AuthService {
         }
 
         const account = await this.loadAccount()
+        const twoStep = account.totpSecret !== null
+
+        if (twoStep && (code === undefined || code === null || code === '')) {
+            throw new TotpRequiredError()
+        }
+
         const passwordMatches = await this.checkPassword(password, account)
         const usernameMatches = textsAreEqual(username, account.username)
 
         if (!passwordMatches || !usernameMatches) {
             this.recordFailure('login_failed', clientKey)
-            throw new InvalidCredentialsError()
+            throw new InvalidCredentialsError(twoStep)
         }
 
-        if (account.totpSecret !== null) {
-            if (code === undefined || code === null || code === '') {
-                throw new TotpRequiredError()
-            }
-
-            if (!this.useTotpCode(account.totpSecret, code)) {
-                this.recordFailure('code_failed', clientKey)
-                throw new InvalidCodeError()
-            }
+        if (twoStep && !(await this.useTotpCode(account, account.totpSecret, code))) {
+            this.recordFailure('code_failed', clientKey)
+            throw new InvalidCredentialsError(true)
         }
 
         this.limiter.recordSuccess(clientKey)
@@ -189,12 +214,7 @@ export class AuthService {
         const account = await this.confirmPassword(currentPassword, clientKey)
         const hashed = await hashPassword(newPassword)
 
-        await this.store.save({
-            username: account.username,
-            salt: hashed.salt,
-            hash: hashed.hash,
-            totpSecret: account.totpSecret
-        })
+        await this.saveAccount(account, {salt: hashed.salt, hash: hashed.hash})
 
         this.limiter.recordSuccess(clientKey)
         this.record('password_changed', clientKey)
@@ -223,18 +243,14 @@ export class AuthService {
             throw new BadRequestError('Start the setup first')
         }
 
-        if (!this.useTotpCode(this.pendingTotpSecret, code)) {
+        const account = await this.loadAccount()
+
+        if (!(await this.useTotpCode(account, this.pendingTotpSecret, code))) {
             this.recordFailure('code_failed', clientKey)
             throw new InvalidCodeError()
         }
 
-        const account = await this.loadAccount()
-        await this.store.save({
-            username: account.username,
-            salt: account.salt,
-            hash: account.hash,
-            totpSecret: this.pendingTotpSecret
-        })
+        await this.saveAccount(account, {totpSecret: this.pendingTotpSecret})
 
         this.pendingTotpSecret = null
         this.record('two_step_enabled', clientKey)
@@ -244,12 +260,7 @@ export class AuthService {
         this.requireSession(token)
 
         const account = await this.confirmPassword(currentPassword, clientKey)
-        await this.store.save({
-            username: account.username,
-            salt: account.salt,
-            hash: account.hash,
-            totpSecret: null
-        })
+        await this.saveAccount(account, {totpSecret: null, totpLastStep: 0})
 
         this.pendingTotpSecret = null
         this.record('two_step_disabled', clientKey)

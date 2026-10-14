@@ -37,11 +37,17 @@ export class AuthStore {
             totpSecret = account.totpSecret
         }
 
+        let totpLastStep = 0
+        if (Number.isInteger(account.totpLastStep) && account.totpLastStep > 0) {
+            totpLastStep = account.totpLastStep
+        }
+
         return {
             username: account.username,
             salt: account.salt,
             hash: account.hash,
-            totpSecret: totpSecret
+            totpSecret: totpSecret,
+            totpLastStep: totpLastStep
         }
     }
 
@@ -53,11 +59,17 @@ export class AuthStore {
             totpSecret = account.totpSecret
         }
 
+        let totpLastStep = 0
+        if (Number.isInteger(account.totpLastStep) && account.totpLastStep > 0) {
+            totpLastStep = account.totpLastStep
+        }
+
         const text = JSON.stringify({
             username: account.username,
             salt: account.salt,
             hash: account.hash,
-            totpSecret: totpSecret
+            totpSecret: totpSecret,
+            totpLastStep: totpLastStep
         }, null, 2) + '\n'
 
         await this.fs.mkdir(directory, {recursive: true, mode: 0o700})
